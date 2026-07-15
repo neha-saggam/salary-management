@@ -147,6 +147,133 @@ async function seedReferenceData() {
   };
 }
 
+async function seedSalaryHistory(
+  refData: Awaited<ReturnType<typeof seedReferenceData>>
+) {
+  console.log('\n💰 Seeding salary history...');
+
+  // Map country IDs to country names and currency codes
+  const countryMap = new Map<string, { name: string; currencyCode: string }>();
+  for (const country of refData.countries) {
+    countryMap.set(country.id, { name: country.name, currencyCode: country.currencyCode });
+  }
+
+  // Map country names to salary band keys
+  const countryNameToKey: Record<string, string> = {
+    'United States': 'US',
+    'India': 'India',
+    'United Kingdom': 'UK',
+    'Germany': 'Germany',
+    'Canada': 'Canada',
+    'Singapore': 'Singapore'
+  };
+
+  // Fetch all employees and FX rates
+  const employees = await prisma.employee.findMany({
+    select: { id: true, hireDate: true, jobLevel: true, countryId: true }
+  });
+
+  const fxRates = await prisma.fxRate.findMany();
+  const fxRateMap = new Map(fxRates.map((f) => [f.currencyCode, f.rateToUsd]));
+
+  let totalSalaryRecords = 0;
+  let processedEmployees = 0;
+
+  // Process employees in batches
+  for (let batch = 0; batch < Math.ceil(employees.length / BATCH_SIZE); batch++) {
+    const batchStart = batch * BATCH_SIZE;
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, employees.length);
+    const batchEmployees = employees.slice(batchStart, batchEnd);
+
+    const salaryRecordBatch = [];
+
+    for (const emp of batchEmployees) {
+      const countryId = emp.countryId;
+      const jobLevel = emp.jobLevel;
+      const countryInfo = countryMap.get(countryId);
+      
+      if (!countryInfo) continue;
+
+      const currencyCode = countryInfo.currencyCode;
+      const fxRate = fxRateMap.get(currencyCode) || new Decimal('1.0');
+      const countryKey = countryNameToKey[countryInfo.name];
+      
+      const band =
+        salaryBandsByCountry[countryKey as keyof typeof salaryBandsByCountry]?.[
+          jobLevel as keyof (typeof salaryBandsByCountry)[string]
+        ];
+
+      if (!band) continue;
+
+      // HIRE record: base band ± 15% variance
+      const hireAmount =
+        band.min + (band.max - band.min) * (0.5 + (Math.random() - 0.5) * 0.3);
+      const hireAmountUsd = new Decimal(hireAmount).times(fxRate).toDecimalPlaces(2);
+
+      salaryRecordBatch.push({
+        employeeId: emp.id,
+        amount: new Decimal(hireAmount).toDecimalPlaces(2),
+        currency: currencyCode,
+        amountUsd: hireAmountUsd,
+        effectiveDate: emp.hireDate,
+        reason: 'HIRE' as const
+      });
+
+      // Generate 0-3 additional records (raises and promotions)
+      const numberOfAdditionalRecords = Math.floor(Math.random() * 4); // 0, 1, 2, or 3
+      let currentAmount = hireAmount;
+      let currentDate = new Date(emp.hireDate);
+
+      for (let rec = 0; rec < numberOfAdditionalRecords; rec++) {
+        // Add 12-18 months to the date
+        currentDate = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 12 + Math.floor(Math.random() * 6),
+          currentDate.getDate()
+        );
+
+        // 80% chance of raise, 20% chance of promotion
+        const isPromotion = Math.random() < 0.2;
+
+        if (isPromotion) {
+          // PROMOTION: 10-15% bump
+          currentAmount *= 1.1 + Math.random() * 0.05;
+        } else {
+          // ANNUAL_RAISE: 3-8% bump
+          currentAmount *= 1.03 + Math.random() * 0.05;
+        }
+
+        const currentAmountUsd = new Decimal(currentAmount)
+          .times(fxRate)
+          .toDecimalPlaces(2);
+
+        salaryRecordBatch.push({
+          employeeId: emp.id,
+          amount: new Decimal(currentAmount).toDecimalPlaces(2),
+          currency: currencyCode,
+          amountUsd: currentAmountUsd,
+          effectiveDate: currentDate,
+          reason: isPromotion ? ('PROMOTION' as const) : ('ANNUAL_RAISE' as const)
+        });
+      }
+    }
+
+    // Create salary records in batch
+    if (salaryRecordBatch.length > 0) {
+      await prisma.salaryRecord.createMany({ data: salaryRecordBatch });
+      totalSalaryRecords += salaryRecordBatch.length;
+    }
+
+    processedEmployees += batchEmployees.length;
+    const progress = Math.round((processedEmployees / employees.length) * 100);
+    console.log(
+      `  [${progress}%] Generated ${totalSalaryRecords} salary records for ${processedEmployees}/${employees.length} employees`
+    );
+  }
+
+  console.log(`✓ Created ${totalSalaryRecords} salary history records`);
+}
+
 async function seedEmployees(
   refData: Awaited<ReturnType<typeof seedReferenceData>>
 ) {
@@ -269,6 +396,7 @@ async function main() {
   try {
     const refData = await seedReferenceData();
     await seedEmployees(refData);
+    await seedSalaryHistory(refData);
     console.log('\n✅ Seed complete!');
   } catch (error) {
     console.error('❌ Seed failed:', error);
