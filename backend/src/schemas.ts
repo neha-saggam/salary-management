@@ -105,6 +105,26 @@ export const SalaryHistoryResponseSchema = z.object({
   records: z.array(SalaryRecordResponseSchema)
 });
 
+// Department schemas
+export const CreateDepartmentSchema = z.object({
+  name: z.string().min(1).max(100)
+});
+
+export const UpdateDepartmentSchema = CreateDepartmentSchema.partial();
+
+export const DepartmentResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date()
+});
+
+export const DepartmentWithStatsSchema = DepartmentResponseSchema.extend({
+  employeeCount: z.number(),
+  averageSalaryUsd: z.any().nullable(),
+  managers: z.array(EmployeeResponseSchema)
+});
+
 export type SalaryRecordResponse = z.infer<typeof SalaryRecordResponseSchema>;
 export type SalaryRecordWithEmployee = z.infer<typeof SalaryRecordWithEmployeeSchema>;
 export type SalaryHistoryResponse = z.infer<typeof SalaryHistoryResponseSchema>;
@@ -112,3 +132,7 @@ export type CreateEmployeeInput = z.infer<typeof CreateEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof UpdateEmployeeSchema>;
 export type EmployeeResponse = z.infer<typeof EmployeeResponseSchema>;
 export type EmployeeWithDetails = z.infer<typeof EmployeeWithDetailsSchema>;
+export type CreateDepartmentInput = z.infer<typeof CreateDepartmentSchema>;
+export type UpdateDepartmentInput = z.infer<typeof UpdateDepartmentSchema>;
+export type DepartmentResponse = z.infer<typeof DepartmentResponseSchema>;
+export type DepartmentWithStats = z.infer<typeof DepartmentWithStatsSchema>;

@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { CreateEmployeeSchema, UpdateEmployeeSchema } from './schemas.js';
+import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateDepartmentSchema, UpdateDepartmentSchema } from './schemas.js';
 
 const prisma = new PrismaClient();
 
@@ -348,6 +348,207 @@ export function createApp() {
     } catch (error) {
       console.error('Salary records error:', error);
       res.status(500).json({ error: 'Failed to fetch salary records' });
+    }
+  });
+
+  // === Department Management Endpoints ===
+
+  // GET /departments - List all departments with statistics
+  app.get('/departments', async (req: Request, res: Response) => {
+    try {
+      const departments = await prisma.department.findMany({
+        include: {
+          employees: {
+            select: { id: true, jobLevel: true, salaryRecords: { take: 1, orderBy: { effectiveDate: 'desc' } } }
+          }
+        },
+        orderBy: { name: 'asc' }
+      });
+
+      const departmentsWithStats = departments.map((dept) => ({
+        ...dept,
+        employeeCount: dept.employees.length,
+        averageSalaryUsd:
+          dept.employees.length > 0
+            ? dept.employees.reduce((sum, emp) => {
+                const salary = emp.salaryRecords[0]?.amountUsd || 0;
+                return sum + Number(salary);
+              }, 0) / dept.employees.length
+            : null,
+        managers: []
+      }));
+
+      res.json(departmentsWithStats);
+    } catch (error) {
+      console.error('Departments error:', error);
+      res.status(500).json({ error: 'Failed to fetch departments' });
+    }
+  });
+
+  // GET /departments/:id - Get single department with team details
+  app.get('/departments/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const department = await prisma.department.findUnique({
+        where: { id },
+        include: {
+          employees: {
+            include: {
+              country: { select: { id: true, name: true, currencyCode: true } },
+              manager: true,
+              salaryRecords: {
+                orderBy: { effectiveDate: 'desc' },
+                take: 1,
+                select: {
+                  amount: true,
+                  currency: true,
+                  amountUsd: true,
+                  effectiveDate: true,
+                  reason: true
+                }
+              }
+            },
+            orderBy: { firstName: 'asc' }
+          }
+        }
+      });
+
+      if (!department) {
+        res.status(404).json({ error: 'Department not found' });
+        return;
+      }
+
+      const employeesWithSalary = department.employees.map((emp) => ({
+        ...emp,
+        currentSalary: emp.salaryRecords[0] || null
+      }));
+
+      const stats = {
+        id: department.id,
+        name: department.name,
+        createdAt: department.createdAt,
+        updatedAt: department.updatedAt,
+        employeeCount: employeesWithSalary.length,
+        averageSalaryUsd:
+          employeesWithSalary.length > 0
+            ? employeesWithSalary.reduce((sum, emp) => sum + Number(emp.currentSalary?.amountUsd || 0), 0) /
+              employeesWithSalary.length
+            : null,
+        employees: employeesWithSalary
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error('Department details error:', error);
+      res.status(500).json({ error: 'Failed to fetch department' });
+    }
+  });
+
+  // POST /departments - Create new department
+  app.post('/departments', async (req: Request, res: Response) => {
+    try {
+      const parsed = CreateDepartmentSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+        return;
+      }
+
+      const { data } = parsed;
+
+      // Check if department already exists
+      const existing = await prisma.department.findUnique({
+        where: { name: data.name }
+      });
+
+      if (existing) {
+        res.status(409).json({ error: 'Department already exists' });
+        return;
+      }
+
+      const department = await prisma.department.create({
+        data: { name: data.name }
+      });
+
+      res.status(201).json(department);
+    } catch (error) {
+      console.error('Create department error:', error);
+      res.status(500).json({ error: 'Failed to create department' });
+    }
+  });
+
+  // PATCH /departments/:id - Update department
+  app.patch('/departments/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const parsed = UpdateDepartmentSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+        return;
+      }
+
+      const { data } = parsed;
+
+      // Check if department exists
+      const existing = await prisma.department.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ error: 'Department not found' });
+        return;
+      }
+
+      // Check if new name conflicts with another department
+      if (data.name && data.name !== existing.name) {
+        const conflict = await prisma.department.findUnique({
+          where: { name: data.name }
+        });
+        if (conflict) {
+          res.status(409).json({ error: 'Department name already in use' });
+          return;
+        }
+      }
+
+      const department = await prisma.department.update({
+        where: { id },
+        data
+      });
+
+      res.json(department);
+    } catch (error) {
+      console.error('Update department error:', error);
+      res.status(500).json({ error: 'Failed to update department' });
+    }
+  });
+
+  // DELETE /departments/:id - Delete department (only if no employees)
+  app.delete('/departments/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const existing = await prisma.department.findUnique({
+        where: { id },
+        include: { _count: { select: { employees: true } } }
+      });
+
+      if (!existing) {
+        res.status(404).json({ error: 'Department not found' });
+        return;
+      }
+
+      if (existing._count.employees > 0) {
+        res.status(409).json({ error: 'Cannot delete department with active employees' });
+        return;
+      }
+
+      const department = await prisma.department.delete({
+        where: { id }
+      });
+
+      res.json(department);
+    } catch (error) {
+      console.error('Delete department error:', error);
+      res.status(500).json({ error: 'Failed to delete department' });
     }
   });
 
