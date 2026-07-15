@@ -1,0 +1,23 @@
+{
+  "name": "acme-salary-mgmt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ACME Salary Management System",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "yarn workspace backend dev",
+    "dev:frontend": "yarn workspace frontend dev",
+    "dev": "concurrently \"yarn dev:backend\" \"yarn dev:frontend\"",
+    "test": "yarn workspaces run test",
+    "build": "yarn workspaces run build",
+    "db:up": "docker-compose up -d postgres",
+    "db:down": "docker-compose down",
+    "db:reset": "docker-compose down -v && docker-compose up -d postgres"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.1"
+  }
+}

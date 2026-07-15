@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id            String    @id @default(uuid())
+  employeeCode  String    @unique
+  firstName     String
+  lastName      String
+  email         String    @unique
+  countryId     String
+  departmentId  String
+  jobLevel      String
+  managerId     String?
+  hireDate      DateTime
+  status        EmployeeStatus @default(ACTIVE)
+
+  country       Country      @relation(fields: [countryId], references: [id])
+  department    Department   @relation(fields: [departmentId], references: [id])
+  manager       Employee?    @relation("ManagerReports", fields: [managerId], references: [id])
+  reports       Employee[]   @relation("ManagerReports")
+  salaryRecords SalaryRecord[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([departmentId])
+  @@index([countryId])
+  @@index([managerId])
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  TERMINATED
+}
+
+model SalaryRecord {
+  id             String   @id @default(uuid())
+  employeeId     String
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String
+  amountUsd      Decimal  @db.Decimal(12, 2)
+  effectiveDate  DateTime
+  reason         SalaryChangeReason
+  createdAt      DateTime @default(now())
+
+  employee       Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, effectiveDate])
+}
+
+enum SalaryChangeReason {
+  HIRE
+  ANNUAL_RAISE
+  PROMOTION
+  ADJUSTMENT
+  MARKET_CORRECTION
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  employees Employee[]
+}
+
+model Country {
+  id            String     @id @default(uuid())
+  name          String     @unique
+  currencyCode  String
+  employees     Employee[]
+}
+
+model FxRate {
+  id            String   @id @default(uuid())
+  currencyCode  String   @unique
+  rateToUsd     Decimal  @db.Decimal(12, 6)
+  asOfDate      DateTime
+}
