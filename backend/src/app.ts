@@ -552,5 +552,280 @@ export function createApp() {
     }
   });
 
+  // === Salary Analytics Endpoints ===
+
+  // Helper function to calculate percentile
+  function percentile(arr: number[], p: number): number {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const index = (p / 100) * (sorted.length - 1);
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    const weight = index % 1;
+    if (lower === upper) return sorted[lower];
+    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+  }
+
+  // Helper function to calculate standard deviation
+  function stdDev(arr: number[]): number {
+    if (arr.length === 0) return 0;
+    const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+    const variance = arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+    return Math.sqrt(variance);
+  }
+
+  // GET /salary-analytics/summary - Overall salary statistics
+  app.get('/salary-analytics/summary', async (req: Request, res: Response) => {
+    try {
+      const records = await prisma.salaryRecord.findMany({
+        where: { reason: 'HIRE' }, // Only latest HIRE records
+        select: { amountUsd: true, employee: { select: { id: true } } }
+      });
+
+      const salaries = records.map((r) => Number(r.amountUsd));
+      const sortedSalaries = [...salaries].sort((a, b) => a - b);
+
+      const stats = {
+        count: salaries.length,
+        min: Math.min(...salaries),
+        max: Math.max(...salaries),
+        avg: salaries.reduce((a, b) => a + b, 0) / salaries.length,
+        median: percentile(salaries, 50),
+        p25: percentile(salaries, 25),
+        p75: percentile(salaries, 75),
+        stdDev: stdDev(salaries)
+      };
+
+      const employees = await prisma.employee.findMany({
+        select: { countryId: true, departmentId: true }
+      });
+
+      const departments = new Set(employees.map((e) => e.departmentId)).size;
+      const countries = new Set(employees.map((e) => e.countryId)).size;
+
+      res.json({
+        totalEmployees: salaries.length,
+        averageSalaryUsd: stats.avg,
+        medianSalaryUsd: stats.median,
+        minSalaryUsd: stats.min,
+        maxSalaryUsd: stats.max,
+        totalPayrollUsd: salaries.reduce((a, b) => a + b, 0),
+        departmentCount: departments,
+        countryCount: countries,
+        statistics: stats
+      });
+    } catch (error) {
+      console.error('Analytics summary error:', error);
+      res.status(500).json({ error: 'Failed to fetch summary' });
+    }
+  });
+
+  // GET /salary-analytics/by-department - Breakdown by department
+  app.get('/salary-analytics/by-department', async (req: Request, res: Response) => {
+    try {
+      const departments = await prisma.department.findMany({
+        include: {
+          employees: {
+            include: {
+              salaryRecords: {
+                where: { reason: 'HIRE' },
+                orderBy: { effectiveDate: 'desc' },
+                take: 1
+              }
+            }
+          }
+        }
+      });
+
+      const analytics = departments.map((dept) => {
+        const employeesWithSalaries = dept.employees.filter((emp) => emp.salaryRecords.length > 0);
+        const salaries = employeesWithSalaries
+          .map((emp) => Number(emp.salaryRecords[0]!.amountUsd))
+          .filter((s) => s > 0);
+
+        return {
+          departmentId: dept.id,
+          departmentName: dept.name,
+          employeeCount: employeesWithSalaries.length,
+          averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+          medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
+          minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
+          maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
+          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+        };
+      });
+
+      res.json(analytics.sort((a, b) => a.departmentName.localeCompare(b.departmentName)));
+    } catch (error) {
+      console.error('Department analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch department analytics' });
+    }
+  });
+
+  // GET /salary-analytics/by-country - Breakdown by country
+  app.get('/salary-analytics/by-country', async (req: Request, res: Response) => {
+    try {
+      const countries = await prisma.country.findMany({
+        include: {
+          employees: {
+            include: {
+              salaryRecords: {
+                where: { reason: 'HIRE' },
+                orderBy: { effectiveDate: 'desc' },
+                take: 1
+              }
+            }
+          }
+        }
+      });
+
+      const analytics = countries.map((country) => {
+        const employeesWithSalaries = country.employees.filter((emp) => emp.salaryRecords.length > 0);
+        const salaries = employeesWithSalaries
+          .map((emp) => Number(emp.salaryRecords[0]!.amountUsd))
+          .filter((s) => s > 0);
+
+        return {
+          countryId: country.id,
+          countryName: country.name,
+          currencyCode: country.currencyCode,
+          employeeCount: employeesWithSalaries.length,
+          averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+          medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
+          minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
+          maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
+          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+        };
+      });
+
+      res.json(analytics.sort((a, b) => a.countryName.localeCompare(b.countryName)));
+    } catch (error) {
+      console.error('Country analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch country analytics' });
+    }
+  });
+
+  // GET /salary-analytics/by-level - Breakdown by job level
+  app.get('/salary-analytics/by-level', async (req: Request, res: Response) => {
+    try {
+      const levels = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
+
+      const analytics = await Promise.all(
+        levels.map(async (level) => {
+          const employees = await prisma.employee.findMany({
+            where: { jobLevel: level },
+            include: {
+              salaryRecords: {
+                where: { reason: 'HIRE' },
+                orderBy: { effectiveDate: 'desc' },
+                take: 1
+              }
+            }
+          });
+
+          const employeesWithSalaries = employees.filter((emp) => emp.salaryRecords.length > 0);
+          const salaries = employeesWithSalaries
+            .map((emp) => Number(emp.salaryRecords[0]!.amountUsd))
+            .filter((s) => s > 0);
+
+          return {
+            jobLevel: level,
+            employeeCount: employeesWithSalaries.length,
+            averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+            medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
+            minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
+            maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
+            totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+          };
+        })
+      );
+
+      res.json(analytics.filter((a) => a.employeeCount > 0));
+    } catch (error) {
+      console.error('Level analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch level analytics' });
+    }
+  });
+
+  // GET /salary-analytics/outliers - Detect salary outliers
+  app.get('/salary-analytics/outliers', async (req: Request, res: Response) => {
+    try {
+      const deviationThreshold = parseFloat(req.query.threshold as string) || 2; // Standard deviations
+
+      // Get all salaries by level
+      const employees = await prisma.employee.findMany({
+        include: {
+          department: { select: { name: true } },
+          salaryRecords: {
+            where: { reason: 'HIRE' },
+            orderBy: { effectiveDate: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      // Calculate stats per level
+      const salariesByLevel: Record<string, number[]> = {};
+      const statsByLevel: Record<string, { avg: number; stdDev: number }> = {};
+
+      employees.forEach((emp) => {
+        if (!salariesByLevel[emp.jobLevel]) salariesByLevel[emp.jobLevel] = [];
+        const salary = emp.salaryRecords[0]?.amountUsd
+          ? Number(emp.salaryRecords[0].amountUsd)
+          : 0;
+        if (salary > 0) salariesByLevel[emp.jobLevel].push(salary);
+      });
+
+      Object.entries(salariesByLevel).forEach(([level, salaries]) => {
+        const avg = salaries.reduce((a, b) => a + b, 0) / salaries.length;
+        const std = stdDev(salaries);
+        statsByLevel[level] = { avg, stdDev: std };
+      });
+
+      // Find outliers
+      const outliers = employees
+        .map((emp) => {
+          const salary = emp.salaryRecords[0]?.amountUsd
+            ? Number(emp.salaryRecords[0].amountUsd)
+            : 0;
+          if (salary === 0) return null;
+
+          const stats = statsByLevel[emp.jobLevel];
+          if (!stats) return null;
+
+          const deviation = Math.abs(salary - stats.avg) / stats.stdDev;
+          const deviationPercent = ((salary - stats.avg) / stats.avg) * 100;
+
+          if (deviation > deviationThreshold) {
+            return {
+              employeeId: emp.id,
+              firstName: emp.firstName,
+              lastName: emp.lastName,
+              email: emp.email,
+              jobLevel: emp.jobLevel,
+              departmentName: emp.department.name,
+              currentSalaryUsd: salary,
+              expectedRangeMin: stats.avg - deviationThreshold * stats.stdDev,
+              expectedRangeMax: stats.avg + deviationThreshold * stats.stdDev,
+              deviation: deviation,
+              deviationPercent: deviationPercent
+            };
+          }
+          return null;
+        })
+        .filter((o) => o !== null)
+        .sort((a, b) => (b?.deviation || 0) - (a?.deviation || 0));
+
+      res.json({
+        threshold: deviationThreshold,
+        outlierCount: outliers.length,
+        outliers
+      });
+    } catch (error) {
+      console.error('Outliers error:', error);
+      res.status(500).json({ error: 'Failed to fetch outliers' });
+    }
+  });
+
   return app;
 }

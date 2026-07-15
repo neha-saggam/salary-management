@@ -125,6 +125,83 @@ export const DepartmentWithStatsSchema = DepartmentResponseSchema.extend({
   managers: z.array(EmployeeResponseSchema)
 });
 
+// Salary Analytics schemas
+export const SalaryStatsSchema = z.object({
+  count: z.number(),
+  min: z.any(),
+  max: z.any(),
+  avg: z.any(),
+  median: z.any(),
+  p25: z.any(),
+  p75: z.any(),
+  stdDev: z.any()
+});
+
+export const SalaryAnalyticsSummarySchema = z.object({
+  totalEmployees: z.number(),
+  averageSalaryUsd: z.any(),
+  medianSalaryUsd: z.any(),
+  minSalaryUsd: z.any(),
+  maxSalaryUsd: z.any(),
+  totalPayrollUsd: z.any(),
+  departmentCount: z.number(),
+  countryCount: z.number(),
+  statistics: SalaryStatsSchema
+});
+
+export const DepartmentAnalyticsSchema = z.object({
+  departmentId: z.string().uuid(),
+  departmentName: z.string(),
+  employeeCount: z.number(),
+  averageSalaryUsd: z.any(),
+  medianSalaryUsd: z.any(),
+  minSalaryUsd: z.any(),
+  maxSalaryUsd: z.any(),
+  totalPayrollUsd: z.any()
+});
+
+export const CountryAnalyticsSchema = z.object({
+  countryId: z.string().uuid(),
+  countryName: z.string(),
+  currencyCode: z.string(),
+  employeeCount: z.number(),
+  averageSalaryUsd: z.any(),
+  medianSalaryUsd: z.any(),
+  minSalaryUsd: z.any(),
+  maxSalaryUsd: z.any(),
+  totalPayrollUsd: z.any()
+});
+
+export const LevelAnalyticsSchema = z.object({
+  jobLevel: z.string(),
+  employeeCount: z.number(),
+  averageSalaryUsd: z.any(),
+  medianSalaryUsd: z.any(),
+  minSalaryUsd: z.any(),
+  maxSalaryUsd: z.any(),
+  totalPayrollUsd: z.any()
+});
+
+export const SalaryOutlierSchema = z.object({
+  employeeId: z.string().uuid(),
+  firstName: z.string(),
+  lastName: z.string(),
+  email: z.string(),
+  jobLevel: z.string(),
+  departmentName: z.string(),
+  currentSalaryUsd: z.any(),
+  expectedRangeMin: z.any(),
+  expectedRangeMax: z.any(),
+  deviation: z.any(),
+  deviationPercent: z.any()
+});
+
+export type SalaryStats = z.infer<typeof SalaryStatsSchema>;
+export type SalaryAnalyticsSummary = z.infer<typeof SalaryAnalyticsSummarySchema>;
+export type DepartmentAnalytics = z.infer<typeof DepartmentAnalyticsSchema>;
+export type CountryAnalytics = z.infer<typeof CountryAnalyticsSchema>;
+export type LevelAnalytics = z.infer<typeof LevelAnalyticsSchema>;
+export type SalaryOutlier = z.infer<typeof SalaryOutlierSchema>;
 export type SalaryRecordResponse = z.infer<typeof SalaryRecordResponseSchema>;
 export type SalaryRecordWithEmployee = z.infer<typeof SalaryRecordWithEmployeeSchema>;
 export type SalaryHistoryResponse = z.infer<typeof SalaryHistoryResponseSchema>;
