@@ -40,13 +40,14 @@ describe('Employee CRUD API', () => {
 
   describe('POST /employees', () => {
     it('should create a new employee with valid data', async () => {
+      const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST001',
+          employeeCode: `TEST${timestamp}`,
           firstName: 'John',
           lastName: 'Doe',
-          email: `test-${Date.now()}@example.com`,
+          email: `test-${timestamp}@example.com`,
           countryId: testCountryId,
           departmentId: testDepartmentId,
           jobLevel: 'L3',
@@ -63,10 +64,11 @@ describe('Employee CRUD API', () => {
     });
 
     it('should return 400 for invalid email', async () => {
+      const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST002',
+          employeeCode: `INVALID${timestamp}`,
           firstName: 'Jane',
           lastName: 'Doe',
           email: 'invalid-email',
@@ -81,13 +83,14 @@ describe('Employee CRUD API', () => {
     });
 
     it('should return 409 for duplicate email', async () => {
-      const email = `duplicate-${Date.now()}@example.com`;
+      const timestamp = Date.now();
+      const email = `duplicate-${timestamp}@example.com`;
 
       // Create first employee
       await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST003',
+          employeeCode: `DUP1${timestamp}`,
           firstName: 'First',
           lastName: 'User',
           email,
@@ -101,7 +104,7 @@ describe('Employee CRUD API', () => {
       const response = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST004',
+          employeeCode: `DUP2${timestamp}`,
           firstName: 'Second',
           lastName: 'User',
           email,
@@ -116,13 +119,14 @@ describe('Employee CRUD API', () => {
     });
 
     it('should use default status ACTIVE', async () => {
+      const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST005',
+          employeeCode: `DEFAULT${timestamp}`,
           firstName: 'Default',
           lastName: 'Status',
-          email: `default-${Date.now()}@example.com`,
+          email: `default-${timestamp}@example.com`,
           countryId: testCountryId,
           departmentId: testDepartmentId,
           jobLevel: 'L4',
@@ -238,12 +242,13 @@ describe('Employee CRUD API', () => {
     });
 
     it('should prevent duplicate email on update', async () => {
+      const timestamp = Date.now();
       // Create another employee
-      const email1 = `update-${Date.now()}@example.com`;
+      const email1 = `update-${timestamp}@example.com`;
       const employee1 = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST006',
+          employeeCode: `UPD1${timestamp}`,
           firstName: 'Emp1',
           lastName: 'One',
           email: email1,
@@ -253,11 +258,11 @@ describe('Employee CRUD API', () => {
           hireDate: new Date().toISOString()
         });
 
-      const email2 = `update2-${Date.now()}@example.com`;
+      const email2 = `update2-${timestamp}@example.com`;
       const employee2 = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST007',
+          employeeCode: `UPD2${timestamp}`,
           firstName: 'Emp2',
           lastName: 'Two',
           email: email2,
@@ -294,11 +299,12 @@ describe('Employee CRUD API', () => {
 
     it('should keep employee in database after deletion', async () => {
       // Create an employee
-      const email = `delete-${Date.now()}@example.com`;
+      const timestamp = Date.now();
+      const email = `delete-${timestamp}@example.com`;
       const createResp = await request(app)
         .post('/employees')
         .send({
-          employeeCode: 'TEST008',
+          employeeCode: `DEL${timestamp}`,
           firstName: 'Delete',
           lastName: 'Me',
           email,

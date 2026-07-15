@@ -255,5 +255,101 @@ export function createApp() {
     }
   });
 
+  // === Salary History Endpoints ===
+
+  // GET /employees/:id/salary-history - Get all salary records for an employee
+  app.get('/employees/:id/salary-history', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const employee = await prisma.employee.findUnique({
+        where: { id },
+        include: {
+          country: { select: { id: true, name: true, currencyCode: true } },
+          department: { select: { id: true, name: true } },
+          manager: true
+        }
+      });
+
+      if (!employee) {
+        res.status(404).json({ error: 'Employee not found' });
+        return;
+      }
+
+      const records = await prisma.salaryRecord.findMany({
+        where: { employeeId: id },
+        orderBy: { effectiveDate: 'desc' }
+      });
+
+      res.json({
+        employee,
+        records
+      });
+    } catch (error) {
+      console.error('Salary history error:', error);
+      res.status(500).json({ error: 'Failed to fetch salary history' });
+    }
+  });
+
+  // GET /salary-records - List all salary records with filters
+  app.get('/salary-records', async (req: Request, res: Response) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const skip = (page - 1) * limit;
+      const employeeId = req.query.employeeId as string | undefined;
+      const reason = req.query.reason as string | undefined;
+      const dateFrom = req.query.dateFrom as string | undefined;
+      const dateTo = req.query.dateTo as string | undefined;
+
+      const where: any = {};
+
+      if (employeeId) {
+        where.employeeId = employeeId;
+      }
+
+      if (reason) {
+        where.reason = reason;
+      }
+
+      if (dateFrom || dateTo) {
+        where.effectiveDate = {};
+        if (dateFrom) where.effectiveDate.gte = new Date(dateFrom);
+        if (dateTo) where.effectiveDate.lte = new Date(dateTo);
+      }
+
+      const [records, total] = await Promise.all([
+        prisma.salaryRecord.findMany({
+          where,
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                jobLevel: true,
+                country: { select: { id: true, name: true, currencyCode: true } },
+                department: { select: { id: true, name: true } }
+              }
+            }
+          },
+          orderBy: { effectiveDate: 'desc' },
+          skip,
+          take: limit
+        }),
+        prisma.salaryRecord.count({ where })
+      ]);
+
+      res.json({
+        data: records,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      });
+    } catch (error) {
+      console.error('Salary records error:', error);
+      res.status(500).json({ error: 'Failed to fetch salary records' });
+    }
+  });
+
   return app;
 }
