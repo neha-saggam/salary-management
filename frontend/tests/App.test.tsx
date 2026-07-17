@@ -35,16 +35,132 @@ afterEach(() => {
 });
 
 function mockEmployeeResponse(data: Array<Record<string, unknown>>) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data,
-        pagination: { page: 1, limit: 200, total: data.length, pages: 1 }
-      })
-    })
-  );
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.includes('/api/employees')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          data,
+          pagination: { page: 1, limit: 200, total: data.length, pages: 1 }
+        })
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/summary')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          totalEmployees: 10000,
+          averageSalaryUsd: 78000,
+          medianSalaryUsd: 69000,
+          minSalaryUsd: 9000,
+          maxSalaryUsd: 245000,
+          totalPayrollUsd: 780000000,
+          departmentCount: 7,
+          countryCount: 6
+        })
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-department')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => []
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-country')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => []
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-level')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => []
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: async () => ({}) });
+  });
+
+  vi.stubGlobal('fetch', fetchMock);
+}
+
+function mockAppFetchWithAnalytics(options?: { analyticsFails?: boolean }) {
+  const analyticsFails = options?.analyticsFails ?? false;
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.includes('/api/employees')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          data: sampleEmployees,
+          pagination: { page: 1, limit: 200, total: sampleEmployees.length, pages: 1 }
+        })
+      });
+    }
+
+    if (analyticsFails && url.includes('/api/salary-analytics/')) {
+      return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+    }
+
+    if (url.includes('/api/salary-analytics/summary')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          totalEmployees: 10000,
+          averageSalaryUsd: 78000,
+          medianSalaryUsd: 69000,
+          minSalaryUsd: 9000,
+          maxSalaryUsd: 245000,
+          totalPayrollUsd: 780000000,
+          departmentCount: 7,
+          countryCount: 6
+        })
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-department')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          { departmentName: 'Engineering', averageSalaryUsd: 98000, employeeCount: 2800, totalPayrollUsd: 274400000 },
+          { departmentName: 'Finance', averageSalaryUsd: 76000, employeeCount: 900, totalPayrollUsd: 68400000 }
+        ]
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-country')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          { countryName: 'Canada', averageSalaryUsd: 84000, employeeCount: 1400, totalPayrollUsd: 117600000 },
+          { countryName: 'India', averageSalaryUsd: 24000, employeeCount: 2200, totalPayrollUsd: 52800000 }
+        ]
+      });
+    }
+
+    if (url.includes('/api/salary-analytics/by-level')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          { jobLevel: 'L1', averageSalaryUsd: 32000, employeeCount: 3000, totalPayrollUsd: 96000000 },
+          { jobLevel: 'L2', averageSalaryUsd: 51000, employeeCount: 2400, totalPayrollUsd: 122400000 }
+        ]
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: async () => ({}) });
+  });
+
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 function mockDeferredEmployeeResponse() {
@@ -53,7 +169,38 @@ function mockDeferredEmployeeResponse() {
     resolveResponse = resolve;
   });
 
-  vi.stubGlobal('fetch', vi.fn().mockReturnValue(responsePromise));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/employees')) {
+        return responsePromise;
+      }
+
+      if (url.includes('/api/salary-analytics/summary')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            totalEmployees: 10000,
+            averageSalaryUsd: 78000,
+            medianSalaryUsd: 69000,
+            minSalaryUsd: 9000,
+            maxSalaryUsd: 245000,
+            totalPayrollUsd: 780000000,
+            departmentCount: 7,
+            countryCount: 6
+          })
+        });
+      }
+
+      if (url.includes('/api/salary-analytics/')) {
+        return Promise.resolve({ ok: true, json: async () => [] });
+      }
+
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    })
+  );
 
   return {
     resolveResponse,
@@ -174,7 +321,7 @@ describe('App Component', () => {
   });
 
   it('shows selected employee details in the edit panel', async () => {
-    mockEmployeeResponse(sampleEmployees);
+    mockAppFetchWithAnalytics();
 
     render(<App />);
 
@@ -188,22 +335,51 @@ describe('App Component', () => {
   });
 
   it('saves employee edits and shows success message', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: sampleEmployees,
-          pagination: { page: 1, limit: 200, total: 2, pages: 1 }
-        })
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          ...sampleEmployees[0],
-          firstName: 'Alicia'
-        })
-      });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/employees?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: sampleEmployees,
+            pagination: { page: 1, limit: 200, total: 2, pages: 1 }
+          })
+        });
+      }
+
+      if (url.includes('/api/employees/1')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            ...sampleEmployees[0],
+            firstName: 'Alicia'
+          })
+        });
+      }
+
+      if (url.includes('/api/salary-analytics/summary')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            totalEmployees: 10000,
+            averageSalaryUsd: 78000,
+            medianSalaryUsd: 69000,
+            minSalaryUsd: 9000,
+            maxSalaryUsd: 245000,
+            totalPayrollUsd: 780000000,
+            departmentCount: 7,
+            countryCount: 6
+          })
+        });
+      }
+
+      if (url.includes('/api/salary-analytics/')) {
+        return Promise.resolve({ ok: true, json: async () => [] });
+      }
+
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -216,26 +392,55 @@ describe('App Component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(await screen.findByText('Employee updated successfully.')).toBeDefined();
-    await screen.findByText('Alicia Johnson');
+    expect(await screen.findByDisplayValue('Alicia')).toBeDefined();
 
     expect(fetchMock).toHaveBeenCalledWith('/api/employees/1', expect.objectContaining({ method: 'PATCH' }));
   });
 
   it('shows update error when save fails', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: sampleEmployees,
-          pagination: { page: 1, limit: 200, total: 2, pages: 1 }
-        })
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: 'Email already in use' })
-      });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/employees?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: sampleEmployees,
+            pagination: { page: 1, limit: 200, total: 2, pages: 1 }
+          })
+        });
+      }
+
+      if (url.includes('/api/employees/1')) {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: async () => ({ error: 'Email already in use' })
+        });
+      }
+
+      if (url.includes('/api/salary-analytics/summary')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            totalEmployees: 10000,
+            averageSalaryUsd: 78000,
+            medianSalaryUsd: 69000,
+            minSalaryUsd: 9000,
+            maxSalaryUsd: 245000,
+            totalPayrollUsd: 780000000,
+            departmentCount: 7,
+            countryCount: 6
+          })
+        });
+      }
+
+      if (url.includes('/api/salary-analytics/')) {
+        return Promise.resolve({ ok: true, json: async () => [] });
+      }
+
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
 
     vi.stubGlobal('fetch', fetchMock);
 
@@ -248,5 +453,25 @@ describe('App Component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     expect(await screen.findByText('Update failed (409)')).toBeDefined();
+  });
+
+  it('renders analytics dashboard summary and breakdown cards', async () => {
+    mockAppFetchWithAnalytics();
+
+    render(<App />);
+
+    expect(await screen.findByText('Salary Analytics Dashboard')).toBeDefined();
+    expect(await screen.findByText('Employees: 10000')).toBeDefined();
+    expect(screen.getByText(/Engineering:/)).toBeDefined();
+    expect(screen.getByText(/Canada:/)).toBeDefined();
+    expect(screen.getByText(/L1:/)).toBeDefined();
+  });
+
+  it('shows analytics error when analytics APIs fail', async () => {
+    mockAppFetchWithAnalytics({ analyticsFails: true });
+
+    render(<App />);
+
+    expect(await screen.findByText(/Analytics error:/)).toBeDefined();
   });
 });

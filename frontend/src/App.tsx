@@ -54,6 +54,26 @@ interface EmployeeListResponse {
   };
 }
 
+interface AnalyticsSummary {
+  totalEmployees: number;
+  averageSalaryUsd: number;
+  medianSalaryUsd: number;
+  minSalaryUsd: number;
+  maxSalaryUsd: number;
+  totalPayrollUsd: number;
+  departmentCount: number;
+  countryCount: number;
+}
+
+interface BreakdownRow {
+  employeeCount: number;
+  averageSalaryUsd: number;
+  totalPayrollUsd: number;
+  departmentName?: string;
+  countryName?: string;
+  jobLevel?: string;
+}
+
 function formatUsd(value: string | number | null): string {
   if (value === null) return 'N/A';
   return new Intl.NumberFormat('en-US', {
@@ -87,6 +107,11 @@ function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [departmentBreakdown, setDepartmentBreakdown] = useState<BreakdownRow[]>([]);
+  const [countryBreakdown, setCountryBreakdown] = useState<BreakdownRow[]>([]);
+  const [levelBreakdown, setLevelBreakdown] = useState<BreakdownRow[]>([]);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -108,6 +133,40 @@ function App() {
     };
 
     loadEmployees();
+  }, []);
+
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      try {
+        const [summaryRes, deptRes, countryRes, levelRes] = await Promise.all([
+          fetch('/api/salary-analytics/summary'),
+          fetch('/api/salary-analytics/by-department'),
+          fetch('/api/salary-analytics/by-country'),
+          fetch('/api/salary-analytics/by-level')
+        ]);
+
+        if (!summaryRes.ok || !deptRes.ok || !countryRes.ok || !levelRes.ok) {
+          throw new Error('Unable to load analytics');
+        }
+
+        const [summaryPayload, deptPayload, countryPayload, levelPayload] = await Promise.all([
+          summaryRes.json(),
+          deptRes.json(),
+          countryRes.json(),
+          levelRes.json()
+        ]);
+
+        setSummary(summaryPayload as AnalyticsSummary);
+        setDepartmentBreakdown(Array.isArray(deptPayload) ? (deptPayload as BreakdownRow[]) : []);
+        setCountryBreakdown(Array.isArray(countryPayload) ? (countryPayload as BreakdownRow[]) : []);
+        setLevelBreakdown(Array.isArray(levelPayload) ? (levelPayload as BreakdownRow[]) : []);
+        setAnalyticsError(null);
+      } catch (err) {
+        setAnalyticsError(err instanceof Error ? err.message : 'Failed to load analytics');
+      }
+    };
+
+    loadAnalytics();
   }, []);
 
   const departments = useMemo(() => {
@@ -175,9 +234,10 @@ function App() {
         throw new Error(`Update failed (${response.status})`);
       }
 
-      const updated = (await response.json()) as EmployeeListItem;
-      setEmployees((prev) => prev.map((emp) => (emp.id === updated.id ? updated : emp)));
-      setEditDraft(updated);
+      const updated = (await response.json()) as Partial<EmployeeListItem> & { id: string };
+      const merged = { ...selectedEmployee, ...updated } as EmployeeListItem;
+      setEmployees((prev) => prev.map((emp) => (emp.id === merged.id ? merged : emp)));
+      setEditDraft(merged);
       setSaveSuccess('Employee updated successfully.');
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Unable to update employee');
@@ -416,6 +476,59 @@ function App() {
               </Paper>
             </Stack>
           )}
+
+          <Paper elevation={0} sx={{ mt: 4, p: 3, borderRadius: 3, border: '1px solid #d8d1c4' }}>
+            <Typography variant="h5" gutterBottom>
+              Salary Analytics Dashboard
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            {analyticsError && <Alert severity="error">Analytics error: {analyticsError}</Alert>}
+
+            {summary && (
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" sx={{ mb: 3 }}>
+                <Chip label={`Employees: ${summary.totalEmployees}`} color="primary" />
+                <Chip label={`Avg Salary: ${formatUsd(summary.averageSalaryUsd)}`} color="success" />
+                <Chip label={`Median: ${formatUsd(summary.medianSalaryUsd)}`} />
+                <Chip label={`Payroll: ${formatUsd(summary.totalPayrollUsd)}`} color="secondary" />
+              </Stack>
+            )}
+
+            <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
+              <Paper elevation={0} sx={{ p: 2, border: '1px solid #e5ded2', flex: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  By Department
+                </Typography>
+                {departmentBreakdown.slice(0, 6).map((row) => (
+                  <Typography key={row.departmentName} variant="body2" sx={{ mb: 0.5 }}>
+                    {row.departmentName}: {formatUsd(row.averageSalaryUsd)} avg ({row.employeeCount} employees)
+                  </Typography>
+                ))}
+              </Paper>
+
+              <Paper elevation={0} sx={{ p: 2, border: '1px solid #e5ded2', flex: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  By Country
+                </Typography>
+                {countryBreakdown.slice(0, 6).map((row) => (
+                  <Typography key={row.countryName} variant="body2" sx={{ mb: 0.5 }}>
+                    {row.countryName}: {formatUsd(row.averageSalaryUsd)} avg ({row.employeeCount} employees)
+                  </Typography>
+                ))}
+              </Paper>
+
+              <Paper elevation={0} sx={{ p: 2, border: '1px solid #e5ded2', flex: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  By Job Level
+                </Typography>
+                {levelBreakdown.map((row) => (
+                  <Typography key={row.jobLevel} variant="body2" sx={{ mb: 0.5 }}>
+                    {row.jobLevel}: {formatUsd(row.averageSalaryUsd)} avg ({row.employeeCount} employees)
+                  </Typography>
+                ))}
+              </Paper>
+            </Stack>
+          </Paper>
         </Paper>
       </Container>
     </Box>
