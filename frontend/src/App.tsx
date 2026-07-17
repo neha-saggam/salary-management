@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Container,
+  Divider,
   FormControl,
   InputLabel,
   MenuItem,
@@ -61,6 +63,18 @@ function formatUsd(value: string | number | null): string {
   }).format(Number(value));
 }
 
+function toPatchPayload(draft: EmployeeListItem, original: EmployeeListItem) {
+  const payload: Record<string, string> = {};
+
+  if (draft.firstName !== original.firstName) payload.firstName = draft.firstName;
+  if (draft.lastName !== original.lastName) payload.lastName = draft.lastName;
+  if (draft.email !== original.email) payload.email = draft.email;
+  if (draft.jobLevel !== original.jobLevel) payload.jobLevel = draft.jobLevel;
+  if (draft.status !== original.status) payload.status = draft.status;
+
+  return payload;
+}
+
 function App() {
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +82,11 @@ function App() {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [countryFilter, setCountryFilter] = useState('ALL');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EmployeeListItem | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -117,6 +136,55 @@ function App() {
       return matchesSearch && matchesDepartment && matchesCountry;
     });
   }, [countryFilter, departmentFilter, employees, search]);
+
+  const selectedEmployee = useMemo(() => {
+    if (!selectedEmployeeId) return null;
+    return employees.find((employee) => employee.id === selectedEmployeeId) ?? null;
+  }, [employees, selectedEmployeeId]);
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      setEditDraft(selectedEmployee);
+      setSaveError(null);
+      setSaveSuccess(null);
+    }
+  }, [selectedEmployee]);
+
+  const handleSave = async () => {
+    if (!selectedEmployee || !editDraft) return;
+
+    const payload = toPatchPayload(editDraft, selectedEmployee);
+    if (Object.keys(payload).length === 0) {
+      setSaveSuccess('No changes to save.');
+      setSaveError(null);
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    try {
+      const response = await fetch(`/api/employees/${selectedEmployee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Update failed (${response.status})`);
+      }
+
+      const updated = (await response.json()) as EmployeeListItem;
+      setEmployees((prev) => prev.map((emp) => (emp.id === updated.id ? updated : emp)));
+      setEditDraft(updated);
+      setSaveSuccess('Employee updated successfully.');
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Unable to update employee');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#f4f1ea', py: 5 }}>
@@ -194,56 +262,159 @@ function App() {
           )}
 
           {!loading && !error && (
-            <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e5ded2' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Employee</TableCell>
-                    <TableCell>Department</TableCell>
-                    <TableCell>Country</TableCell>
-                    <TableCell>Level</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Current Salary</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredEmployees.map((employee) => (
-                    <TableRow key={employee.id} hover>
-                      <TableCell>
-                        <Typography fontWeight={600}>
-                          {employee.firstName} {employee.lastName}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {employee.employeeCode} • {employee.email}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{employee.department.name}</TableCell>
-                      <TableCell>
-                        {employee.country.name} ({employee.country.currencyCode})
-                      </TableCell>
-                      <TableCell>{employee.jobLevel}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={employee.status}
-                          color={employee.status === 'ACTIVE' ? 'success' : 'default'}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {formatUsd(employee.currentSalary?.amountUsd ?? null)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredEmployees.length === 0 && (
+            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} alignItems="stretch">
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{ border: '1px solid #e5ded2', flex: 1.5 }}
+              >
+                <Table>
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={6}>
-                        <Typography color="text.secondary">No employees match the current filters.</Typography>
-                      </TableCell>
+                      <TableCell>Employee</TableCell>
+                      <TableCell>Department</TableCell>
+                      <TableCell>Country</TableCell>
+                      <TableCell>Level</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Current Salary</TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {filteredEmployees.map((employee) => (
+                      <TableRow
+                        key={employee.id}
+                        hover
+                        selected={employee.id === selectedEmployeeId}
+                        onClick={() => setSelectedEmployeeId(employee.id)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>
+                          <Typography fontWeight={600}>
+                            {employee.firstName} {employee.lastName}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {employee.employeeCode} • {employee.email}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{employee.department.name}</TableCell>
+                        <TableCell>
+                          {employee.country.name} ({employee.country.currencyCode})
+                        </TableCell>
+                        <TableCell>{employee.jobLevel}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={employee.status}
+                            color={employee.status === 'ACTIVE' ? 'success' : 'default'}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatUsd(employee.currentSalary?.amountUsd ?? null)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredEmployees.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Typography color="text.secondary">No employees match the current filters.</Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Paper elevation={0} sx={{ border: '1px solid #e5ded2', p: 3, flex: 1 }}>
+                <Typography variant="h6" gutterBottom>
+                  Employee Detail / Edit
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+
+                {!selectedEmployee || !editDraft ? (
+                  <Typography color="text.secondary">Select an employee from the table to view and edit details.</Typography>
+                ) : (
+                  <Stack spacing={2}>
+                    {saveError && <Alert severity="error">{saveError}</Alert>}
+                    {saveSuccess && <Alert severity="success">{saveSuccess}</Alert>}
+
+                    <TextField
+                      label="First name"
+                      value={editDraft.firstName}
+                      onChange={(event) =>
+                        setEditDraft((prev) => (prev ? { ...prev, firstName: event.target.value } : prev))
+                      }
+                    />
+                    <TextField
+                      label="Last name"
+                      value={editDraft.lastName}
+                      onChange={(event) =>
+                        setEditDraft((prev) => (prev ? { ...prev, lastName: event.target.value } : prev))
+                      }
+                    />
+                    <TextField
+                      label="Email"
+                      value={editDraft.email}
+                      onChange={(event) =>
+                        setEditDraft((prev) => (prev ? { ...prev, email: event.target.value } : prev))
+                      }
+                    />
+
+                    <FormControl>
+                      <InputLabel id="edit-level-label">Job level</InputLabel>
+                      <Select
+                        labelId="edit-level-label"
+                        label="Job level"
+                        value={editDraft.jobLevel}
+                        onChange={(event) =>
+                          setEditDraft((prev) =>
+                            prev ? { ...prev, jobLevel: String(event.target.value) } : prev
+                          )
+                        }
+                      >
+                        {['L1', 'L2', 'L3', 'L4', 'L5', 'L6'].map((level) => (
+                          <MenuItem key={level} value={level}>
+                            {level}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControl>
+                      <InputLabel id="edit-status-label">Status</InputLabel>
+                      <Select
+                        labelId="edit-status-label"
+                        label="Status"
+                        value={editDraft.status}
+                        onChange={(event) =>
+                          setEditDraft((prev) =>
+                            prev ? { ...prev, status: String(event.target.value) } : prev
+                          )
+                        }
+                      >
+                        <MenuItem value="ACTIVE">ACTIVE</MenuItem>
+                        <MenuItem value="TERMINATED">TERMINATED</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Employee Code: {editDraft.employeeCode}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Department: {editDraft.department.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Country: {editDraft.country.name}
+                      </Typography>
+                    </Box>
+
+                    <Button variant="contained" onClick={handleSave} disabled={saving}>
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </Stack>
+                )}
+              </Paper>
+            </Stack>
           )}
         </Paper>
       </Container>

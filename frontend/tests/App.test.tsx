@@ -2,6 +2,33 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../src/App';
 
+const sampleEmployees = [
+  {
+    id: '1',
+    employeeCode: 'EMP0001',
+    firstName: 'Alice',
+    lastName: 'Johnson',
+    email: 'alice@acme.com',
+    jobLevel: 'L3',
+    status: 'ACTIVE',
+    country: { name: 'Canada', currencyCode: 'CAD' },
+    department: { name: 'Engineering' },
+    currentSalary: { amountUsd: '85000', currency: 'CAD' }
+  },
+  {
+    id: '2',
+    employeeCode: 'EMP0002',
+    firstName: 'Bob',
+    lastName: 'Smith',
+    email: 'bob@acme.com',
+    jobLevel: 'L2',
+    status: 'ACTIVE',
+    country: { name: 'India', currencyCode: 'INR' },
+    department: { name: 'Finance' },
+    currentSalary: { amountUsd: '22000', currency: 'INR' }
+  }
+];
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -86,32 +113,7 @@ describe('App Component', () => {
   });
 
   it('filters employees by search text', async () => {
-    mockEmployeeResponse([
-      {
-        id: '1',
-        employeeCode: 'EMP0001',
-        firstName: 'Alice',
-        lastName: 'Johnson',
-        email: 'alice@acme.com',
-        jobLevel: 'L3',
-        status: 'ACTIVE',
-        country: { name: 'Canada', currencyCode: 'CAD' },
-        department: { name: 'Engineering' },
-        currentSalary: { amountUsd: '85000', currency: 'CAD' }
-      },
-      {
-        id: '2',
-        employeeCode: 'EMP0002',
-        firstName: 'Bob',
-        lastName: 'Smith',
-        email: 'bob@acme.com',
-        jobLevel: 'L2',
-        status: 'ACTIVE',
-        country: { name: 'India', currencyCode: 'INR' },
-        department: { name: 'Finance' },
-        currentSalary: { amountUsd: '22000', currency: 'INR' }
-      }
-    ]);
+    mockEmployeeResponse(sampleEmployees);
 
     render(<App />);
 
@@ -127,32 +129,7 @@ describe('App Component', () => {
   });
 
   it('filters employees by department and country', async () => {
-    mockEmployeeResponse([
-      {
-        id: '1',
-        employeeCode: 'EMP0001',
-        firstName: 'Alice',
-        lastName: 'Johnson',
-        email: 'alice@acme.com',
-        jobLevel: 'L3',
-        status: 'ACTIVE',
-        country: { name: 'Canada', currencyCode: 'CAD' },
-        department: { name: 'Engineering' },
-        currentSalary: { amountUsd: '85000', currency: 'CAD' }
-      },
-      {
-        id: '2',
-        employeeCode: 'EMP0002',
-        firstName: 'Bob',
-        lastName: 'Smith',
-        email: 'bob@acme.com',
-        jobLevel: 'L2',
-        status: 'ACTIVE',
-        country: { name: 'India', currencyCode: 'INR' },
-        department: { name: 'Finance' },
-        currentSalary: { amountUsd: '22000', currency: 'INR' }
-      }
-    ]);
+    mockEmployeeResponse(sampleEmployees);
 
     render(<App />);
 
@@ -179,32 +156,7 @@ describe('App Component', () => {
   });
 
   it('updates visible and loaded counters when filters change', async () => {
-    mockEmployeeResponse([
-      {
-        id: '1',
-        employeeCode: 'EMP0001',
-        firstName: 'Alice',
-        lastName: 'Johnson',
-        email: 'alice@acme.com',
-        jobLevel: 'L3',
-        status: 'ACTIVE',
-        country: { name: 'Canada', currencyCode: 'CAD' },
-        department: { name: 'Engineering' },
-        currentSalary: { amountUsd: '85000', currency: 'CAD' }
-      },
-      {
-        id: '2',
-        employeeCode: 'EMP0002',
-        firstName: 'Bob',
-        lastName: 'Smith',
-        email: 'bob@acme.com',
-        jobLevel: 'L2',
-        status: 'ACTIVE',
-        country: { name: 'India', currencyCode: 'INR' },
-        department: { name: 'Finance' },
-        currentSalary: { amountUsd: '22000', currency: 'INR' }
-      }
-    ]);
+    mockEmployeeResponse(sampleEmployees);
 
     render(<App />);
 
@@ -219,5 +171,82 @@ describe('App Component', () => {
       expect(screen.getByText('1 visible')).toBeDefined();
       expect(screen.getByText('2 loaded')).toBeDefined();
     });
+  });
+
+  it('shows selected employee details in the edit panel', async () => {
+    mockEmployeeResponse(sampleEmployees);
+
+    render(<App />);
+
+    const alice = await screen.findByText('Alice Johnson');
+    fireEvent.click(alice);
+
+    expect(await screen.findByDisplayValue('Alice')).toBeDefined();
+    expect(screen.getByDisplayValue('Johnson')).toBeDefined();
+    expect(screen.getByDisplayValue('alice@acme.com')).toBeDefined();
+    expect(screen.getByText('Employee Code: EMP0001')).toBeDefined();
+  });
+
+  it('saves employee edits and shows success message', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: sampleEmployees,
+          pagination: { page: 1, limit: 200, total: 2, pages: 1 }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ...sampleEmployees[0],
+          firstName: 'Alicia'
+        })
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText('Alice Johnson'));
+    fireEvent.change(await screen.findByLabelText('First name'), {
+      target: { value: 'Alicia' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Employee updated successfully.')).toBeDefined();
+    await screen.findByText('Alicia Johnson');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/employees/1', expect.objectContaining({ method: 'PATCH' }));
+  });
+
+  it('shows update error when save fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: sampleEmployees,
+          pagination: { page: 1, limit: 200, total: 2, pages: 1 }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'Email already in use' })
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText('Alice Johnson'));
+    fireEvent.change(await screen.findByLabelText('Email'), {
+      target: { value: 'conflict@acme.com' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Update failed (409)')).toBeDefined();
   });
 });
