@@ -1,5 +1,90 @@
 # Architecture & Design Rationale
 
+## System Architecture Diagram
+
+The following diagram shows the runtime flow for local development and production.
+
+```mermaid
+flowchart LR
+		HR[HR Manager]
+		UI[React + MUI SPA\nVite Dev Server in Local]
+		API[Express + TypeScript API]
+		ORM[Prisma Client]
+		DB[(PostgreSQL)]
+		FX[FxRate Snapshot Table]
+
+		subgraph Local Development
+			VITE[Vite Proxy /api]
+			HR --> UI
+			UI --> VITE --> API
+			API --> ORM --> DB
+			ORM --> FX
+		end
+
+		subgraph Production
+			CONTAINER[Single Backend Container\nExpress serves built frontend]
+			HR --> CONTAINER
+			CONTAINER --> DB
+		end
+```
+
+## Schema Entity Diagram
+
+The following entity relationship diagram reflects the implemented Prisma model.
+
+```mermaid
+erDiagram
+		COUNTRY ||--o{ EMPLOYEE : "has"
+		DEPARTMENT ||--o{ EMPLOYEE : "has"
+		EMPLOYEE ||--o{ SALARY_RECORD : "receives"
+		EMPLOYEE ||--o{ EMPLOYEE : "manages"
+
+		COUNTRY {
+			string id PK
+			string name
+			string currencyCode
+		}
+
+		DEPARTMENT {
+			string id PK
+			string name
+		}
+
+		EMPLOYEE {
+			string id PK
+			string employeeCode UK
+			string firstName
+			string lastName
+			string email UK
+			string countryId FK
+			string departmentId FK
+			string jobLevel
+			string managerId FK
+			datetime hireDate
+			string status
+			datetime createdAt
+			datetime updatedAt
+		}
+
+		SALARY_RECORD {
+			string id PK
+			string employeeId FK
+			decimal amount
+			string currency
+			decimal amountUsd
+			datetime effectiveDate
+			string reason
+			datetime createdAt
+		}
+
+		FX_RATE {
+			string id PK
+			string currencyCode UK
+			decimal rateToUsd
+			datetime asOfDate
+		}
+```
+
 ## Why This Stack?
 
 Every choice is driven by **developer familiarity under assessment time pressure**. See requirements.md for full scope context.
