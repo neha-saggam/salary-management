@@ -1,6 +1,8 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateDepartmentSchema, UpdateDepartmentSchema } from './schemas.js';
+import { requireAuth, signToken } from './auth.js';
 
 const prisma = new PrismaClient();
 
@@ -17,7 +19,7 @@ export function createApp() {
     next();
   });
 
-  // Health check endpoint
+  // Health check endpoint — public
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
@@ -25,6 +27,59 @@ export function createApp() {
       uptime: process.uptime()
     });
   });
+
+  // === Auth Endpoints (public) ===
+
+  // POST /auth/login
+  app.post('/auth/login', async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        res.status(400).json({ error: 'email and password are required' });
+        return;
+      }
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      const token = signToken({ userId: user.id, email: user.email, role: user.role });
+      res.json({ token, role: user.role });
+    } catch {
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // POST /auth/register — HR_ADMIN only (or open during initial setup)
+  app.post('/auth/register', requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (req.user?.role !== 'HR_ADMIN') {
+        res.status(403).json({ error: 'Only HR_ADMIN can create users' });
+        return;
+      }
+      const { email, password, role } = req.body;
+      if (!email || !password) {
+        res.status(400).json({ error: 'email and password are required' });
+        return;
+      }
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        res.status(409).json({ error: 'Email already in use' });
+        return;
+      }
+      const passwordHash = await bcrypt.hash(password, 12);
+      const user = await prisma.user.create({
+        data: { email, passwordHash, role: role ?? 'HR_MANAGER' },
+        select: { id: true, email: true, role: true, createdAt: true }
+      });
+      res.status(201).json(user);
+    } catch {
+      res.status(500).json({ error: 'Registration failed' });
+    }
+  });
+
+  // All routes below require authentication
+  app.use(requireAuth);
 
   // === Employee CRUD Endpoints ===
 

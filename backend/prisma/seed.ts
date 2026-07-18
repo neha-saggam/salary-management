@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { faker } from '@faker-js/faker';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -440,11 +441,29 @@ async function main() {
     const refData = await seedReferenceData();
     await seedEmployees(refData);
     await seedSalaryHistory(refData);
+    await seedDefaultUsers();
     console.log('\n✅ Seed complete!');
   } catch (error) {
     console.error('❌ Seed failed:', error);
     throw error;
   }
+}
+
+async function seedDefaultUsers() {
+  console.log('\n🔐 Seeding default users...');
+  const users = [
+    { email: 'admin@acme.com', password: 'Admin1234!', role: 'HR_ADMIN' as const },
+    { email: 'hr@acme.com',    password: 'HrUser123!', role: 'HR_MANAGER' as const }
+  ];
+  for (const u of users) {
+    const passwordHash = await bcrypt.hash(u.password, 12);
+    await prisma.user.upsert({
+      where:  { email: u.email },
+      update: { passwordHash, role: u.role },
+      create: { email: u.email, passwordHash, role: u.role }
+    });
+  }
+  console.log(`✓ Created ${users.length} default users (admin@acme.com / hr@acme.com)`);
 }
 
 main()

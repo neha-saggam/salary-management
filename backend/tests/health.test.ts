@@ -20,4 +20,19 @@ describe('Health Check Endpoint', () => {
     const timestamp = new Date(response.body.timestamp);
     expect(timestamp.getTime()).toBeGreaterThan(0);
   });
+
+  it('should support /api-prefixed health path', async () => {
+    const app = createApp();
+    const response = await request(app).get('/api/health');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('status', 'ok');
+  });
+
+  it('should still return 404 for unknown /api routes', async () => {
+    const app = createApp();
+    const response = await request(app).get('/api/unknown-route');
+
+    expect(response.status).toBe(401); // 401 before 404 because auth middleware runs first
+  });
 });

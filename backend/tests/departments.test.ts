@@ -1,22 +1,30 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { getAuthToken } from './helpers';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const app = createApp();
 
+let authToken: string;
+
 let testDepartmentId: string;
 let testDepartmentName: string;
 
 describe('Department Management API', () => {
+  beforeAll(async () => {
+    authToken = await getAuthToken(app);
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
   describe('GET /departments', () => {
     it('should list all departments with statistics', async () => {
-      const response = await request(app).get('/departments');
+      const response = await request(app).get('/departments')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -24,7 +32,8 @@ describe('Department Management API', () => {
     });
 
     it('should include employee count for each department', async () => {
-      const response = await request(app).get('/departments');
+      const response = await request(app).get('/departments')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       response.body.forEach((dept: any) => {
@@ -35,7 +44,8 @@ describe('Department Management API', () => {
     });
 
     it('should include average salary USD', async () => {
-      const response = await request(app).get('/departments');
+      const response = await request(app).get('/departments')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       response.body.forEach((dept: any) => {
@@ -48,7 +58,8 @@ describe('Department Management API', () => {
     });
 
     it('should be ordered alphabetically by name', async () => {
-      const response = await request(app).get('/departments');
+      const response = await request(app).get('/departments')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       const departments = response.body;
@@ -73,7 +84,8 @@ describe('Department Management API', () => {
         throw new Error('No test department found');
       }
 
-      const response = await request(app).get(`/departments/${testDepartmentId}`);
+      const response = await request(app).get(`/departments/${testDepartmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(testDepartmentId);
@@ -85,7 +97,8 @@ describe('Department Management API', () => {
         throw new Error('No test department found');
       }
 
-      const response = await request(app).get(`/departments/${testDepartmentId}`);
+      const response = await request(app).get(`/departments/${testDepartmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('employees');
@@ -97,7 +110,8 @@ describe('Department Management API', () => {
         throw new Error('No test department found');
       }
 
-      const response = await request(app).get(`/departments/${testDepartmentId}`);
+      const response = await request(app).get(`/departments/${testDepartmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('employeeCount');
@@ -110,7 +124,8 @@ describe('Department Management API', () => {
         throw new Error('No test department found');
       }
 
-      const response = await request(app).get(`/departments/${testDepartmentId}`);
+      const response = await request(app).get(`/departments/${testDepartmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       if (response.body.employees.length > 0) {
@@ -124,7 +139,8 @@ describe('Department Management API', () => {
     });
 
     it('should return 404 for non-existent department', async () => {
-      const response = await request(app).get(`/departments/00000000-0000-0000-0000-000000000000`);
+      const response = await request(app).get(`/departments/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(404);
       expect(response.body.error).toContain('not found');
@@ -135,7 +151,8 @@ describe('Department Management API', () => {
         throw new Error('No test department found');
       }
 
-      const response = await request(app).get(`/departments/${testDepartmentId}`);
+      const response = await request(app).get(`/departments/${testDepartmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       const employees = response.body.employees;
@@ -152,6 +169,7 @@ describe('Department Management API', () => {
       const timestamp = Date.now();
       const response = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           name: `Test Department ${timestamp}`
         });
@@ -165,6 +183,7 @@ describe('Department Management API', () => {
     it('should return 400 for empty name', async () => {
       const response = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: '' });
 
       expect(response.status).toBe(400);
@@ -176,10 +195,12 @@ describe('Department Management API', () => {
       const name = `Duplicate Test ${timestamp}`;
 
       // Create first department
-      await request(app).post('/departments').send({ name });
+      await request(app).post('/departments')
+        .set('Authorization', `Bearer ${authToken}`).send({ name });
 
       // Try to create duplicate
-      const response = await request(app).post('/departments').send({ name });
+      const response = await request(app).post('/departments')
+        .set('Authorization', `Bearer ${authToken}`).send({ name });
 
       expect(response.status).toBe(409);
       expect(response.body.error).toContain('already exists');
@@ -189,6 +210,7 @@ describe('Department Management API', () => {
       const timestamp = Date.now();
       const response = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           name: `Research and Development ${timestamp}`
         });
@@ -205,6 +227,7 @@ describe('Department Management API', () => {
       // Create a department to update
       const resp = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: `Update Test ${Date.now()}` });
       updateTestDeptId = resp.body.id;
     });
@@ -213,6 +236,7 @@ describe('Department Management API', () => {
       const newName = `Updated Name ${Date.now()}`;
       const response = await request(app)
         .patch(`/departments/${updateTestDeptId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: newName });
 
       expect(response.status).toBe(200);
@@ -222,6 +246,7 @@ describe('Department Management API', () => {
     it('should return 404 for non-existent department', async () => {
       const response = await request(app)
         .patch(`/departments/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: 'New Name' });
 
       expect(response.status).toBe(404);
@@ -230,6 +255,7 @@ describe('Department Management API', () => {
     it('should return 400 for invalid update data', async () => {
       const response = await request(app)
         .patch(`/departments/${updateTestDeptId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: '' });
 
       expect(response.status).toBe(400);
@@ -248,6 +274,7 @@ describe('Department Management API', () => {
       // Try to rename to existing department's name
       const response = await request(app)
         .patch(`/departments/${updateTestDeptId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: existing.name });
 
       expect(response.status).toBe(409);
@@ -262,6 +289,7 @@ describe('Department Management API', () => {
       // Update to same name should work
       const response = await request(app)
         .patch(`/departments/${updateTestDeptId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: current.name });
 
       expect(response.status).toBe(200);
@@ -274,19 +302,22 @@ describe('Department Management API', () => {
       // Create a new department with no employees
       const createResp = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: `Delete Test ${Date.now()}` });
 
       const deptId = createResp.body.id;
 
       // Delete it
-      const response = await request(app).delete(`/departments/${deptId}`);
+      const response = await request(app).delete(`/departments/${deptId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(deptId);
     });
 
     it('should return 404 for non-existent department', async () => {
-      const response = await request(app).delete(`/departments/00000000-0000-0000-0000-000000000000`);
+      const response = await request(app).delete(`/departments/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(404);
     });
@@ -302,7 +333,8 @@ describe('Department Management API', () => {
       }
 
       // Try to delete it
-      const response = await request(app).delete(`/departments/${dept.id}`);
+      const response = await request(app).delete(`/departments/${dept.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(409);
       expect(response.body.error).toContain('Cannot delete');
@@ -312,16 +344,19 @@ describe('Department Management API', () => {
       // Create a department
       const createResp = await request(app)
         .post('/departments')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ name: `Double Delete Test ${Date.now()}` });
 
       const deptId = createResp.body.id;
 
       // Delete it once
-      const firstDelete = await request(app).delete(`/departments/${deptId}`);
+      const firstDelete = await request(app).delete(`/departments/${deptId}`)
+        .set('Authorization', `Bearer ${authToken}`);
       expect(firstDelete.status).toBe(200);
 
       // Try to delete again
-      const secondDelete = await request(app).delete(`/departments/${deptId}`);
+      const secondDelete = await request(app).delete(`/departments/${deptId}`)
+        .set('Authorization', `Bearer ${authToken}`);
       expect(secondDelete.status).toBe(404);
     });
   });

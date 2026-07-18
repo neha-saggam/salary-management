@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { getAuthToken } from './helpers';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const app = createApp();
+
+let authToken: string;
 
 let testCountryId: string;
 let testDepartmentId: string;
@@ -29,6 +32,10 @@ describe('Employee CRUD API', () => {
     testJobLevelId = jobLevel.id;
   });
 
+  beforeAll(async () => {
+    authToken = await getAuthToken(app);
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -38,6 +45,7 @@ describe('Employee CRUD API', () => {
       const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `TEST${timestamp}`,
           firstName: 'John',
@@ -62,6 +70,7 @@ describe('Employee CRUD API', () => {
       const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `INVALID${timestamp}`,
           firstName: 'Jane',
@@ -84,6 +93,7 @@ describe('Employee CRUD API', () => {
       // Create first employee
       await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `DUP1${timestamp}`,
           firstName: 'First',
@@ -98,6 +108,7 @@ describe('Employee CRUD API', () => {
       // Try to create duplicate
       const response = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `DUP2${timestamp}`,
           firstName: 'Second',
@@ -117,6 +128,7 @@ describe('Employee CRUD API', () => {
       const timestamp = Date.now();
       const response = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `DEFAULT${timestamp}`,
           firstName: 'Default',
@@ -137,6 +149,7 @@ describe('Employee CRUD API', () => {
     it('should list employees with pagination', async () => {
       const response = await request(app)
         .get('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .query({ page: 1, limit: 10 });
 
       expect(response.status).toBe(200);
@@ -148,14 +161,16 @@ describe('Employee CRUD API', () => {
     });
 
     it('should return 10 employees by default', async () => {
-      const response = await request(app).get('/employees');
+      const response = await request(app).get('/employees')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeLessThanOrEqual(50);
     });
 
     it('should include jobLevel object with code, name, rank', async () => {
-      const response = await request(app).get('/employees').query({ limit: 1 });
+      const response = await request(app).get('/employees')
+        .set('Authorization', `Bearer ${authToken}`).query({ limit: 1 });
 
       expect(response.status).toBe(200);
       const emp = response.body.data[0];
@@ -165,7 +180,8 @@ describe('Employee CRUD API', () => {
     });
 
     it('should filter by title (CEO)', async () => {
-      const response = await request(app).get('/employees').query({ title: 'CEO' });
+      const response = await request(app).get('/employees')
+        .set('Authorization', `Bearer ${authToken}`).query({ title: 'CEO' });
 
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeGreaterThanOrEqual(1);
@@ -177,6 +193,7 @@ describe('Employee CRUD API', () => {
     it('should include current salary in response', async () => {
       const response = await request(app)
         .get('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .query({ limit: 1 });
 
       expect(response.status).toBe(200);
@@ -186,6 +203,7 @@ describe('Employee CRUD API', () => {
     it('should include country and department', async () => {
       const response = await request(app)
         .get('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .query({ limit: 1 });
 
       expect(response.status).toBe(200);
@@ -200,7 +218,8 @@ describe('Employee CRUD API', () => {
 
   describe('GET /employees/:id', () => {
     it('should get employee by id', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}`);
+      const response = await request(app).get(`/employees/${testEmployeeId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(testEmployeeId);
@@ -210,14 +229,16 @@ describe('Employee CRUD API', () => {
     it('should return 404 for non-existent employee', async () => {
       const response = await request(app).get(
         `/employees/00000000-0000-0000-0000-000000000000`
-      );
+      )
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(404);
       expect(response.body.error).toContain('not found');
     });
 
     it('should include related data', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}`);
+      const response = await request(app).get(`/employees/${testEmployeeId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('country');
@@ -230,6 +251,7 @@ describe('Employee CRUD API', () => {
     it('should update employee details', async () => {
       const response = await request(app)
         .patch(`/employees/${testEmployeeId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           firstName: 'Jonathan',
           jobLevelId: testJobLevelId
@@ -243,6 +265,7 @@ describe('Employee CRUD API', () => {
     it('should return 404 for non-existent employee', async () => {
       const response = await request(app)
         .patch(`/employees/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ firstName: 'Update' });
 
       expect(response.status).toBe(404);
@@ -251,6 +274,7 @@ describe('Employee CRUD API', () => {
     it('should validate update data', async () => {
       const response = await request(app)
         .patch(`/employees/${testEmployeeId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ email: 'invalid-email' });
 
       expect(response.status).toBe(400);
@@ -262,6 +286,7 @@ describe('Employee CRUD API', () => {
       const email1 = `update-${timestamp}@example.com`;
       const employee1 = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `UPD1${timestamp}`,
           firstName: 'Emp1',
@@ -276,6 +301,7 @@ describe('Employee CRUD API', () => {
       const email2 = `update2-${timestamp}@example.com`;
       const employee2 = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `UPD2${timestamp}`,
           firstName: 'Emp2',
@@ -290,6 +316,7 @@ describe('Employee CRUD API', () => {
       // Try to update employee2 with employee1's email
       const response = await request(app)
         .patch(`/employees/${employee2.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .send({ email: email1 });
 
       expect(response.status).toBe(409);
@@ -298,7 +325,8 @@ describe('Employee CRUD API', () => {
 
   describe('DELETE /employees/:id', () => {
     it('should soft delete employee (set status to TERMINATED)', async () => {
-      const response = await request(app).delete(`/employees/${testEmployeeId}`);
+      const response = await request(app).delete(`/employees/${testEmployeeId}`)
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('TERMINATED');
@@ -307,7 +335,8 @@ describe('Employee CRUD API', () => {
     it('should return 404 for non-existent employee', async () => {
       const response = await request(app).delete(
         `/employees/00000000-0000-0000-0000-000000000000`
-      );
+      )
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(404);
     });
@@ -318,6 +347,7 @@ describe('Employee CRUD API', () => {
       const email = `delete-${timestamp}@example.com`;
       const createResp = await request(app)
         .post('/employees')
+        .set('Authorization', `Bearer ${authToken}`)
         .send({
           employeeCode: `DEL${timestamp}`,
           firstName: 'Delete',
@@ -332,11 +362,13 @@ describe('Employee CRUD API', () => {
       const empId = createResp.body.id;
 
       // Delete it
-      const deleteResp = await request(app).delete(`/employees/${empId}`);
+      const deleteResp = await request(app).delete(`/employees/${empId}`)
+        .set('Authorization', `Bearer ${authToken}`);
       expect(deleteResp.status).toBe(200);
 
       // Should still be retrievable but terminated
-      const getResp = await request(app).get(`/employees/${empId}`);
+      const getResp = await request(app).get(`/employees/${empId}`)
+        .set('Authorization', `Bearer ${authToken}`);
       expect(getResp.status).toBe(200);
       expect(getResp.body.status).toBe('TERMINATED');
     });
