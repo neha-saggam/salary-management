@@ -11,6 +11,10 @@
     "start": "node dist/index.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "lint": "eslint src tests --ext .ts",
+    "lint:fix": "eslint src tests --ext .ts --fix",
+    "format": "prettier --write src tests prisma",
+    "format:check": "prettier --check src tests prisma",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio"
@@ -26,11 +30,16 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@faker-js/faker": "^10.5.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.5",
     "prisma": "^5.8.0",
     "supertest": "^6.3.3",
     "tsx": "^4.7.0",

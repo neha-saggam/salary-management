@@ -41,6 +41,12 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Lint backend
+        run: yarn workspace backend lint
+
+      - name: Check formatting
+        run: yarn workspace backend format:check
+
       - name: Apply migrations
         run: yarn workspace backend prisma migrate deploy
 
