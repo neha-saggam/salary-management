@@ -36,37 +36,38 @@ The following entity relationship diagram reflects the implemented Prisma model.
 erDiagram
 		COUNTRY ||--o{ EMPLOYEE : "has"
 		DEPARTMENT ||--o{ EMPLOYEE : "has"
-		EMPLOYEE ||--o{ SALARY_RECORD : "receives"
-		EMPLOYEE ||--o{ EMPLOYEE : "manages"
+    JOB_LEVEL ||--o{ EMPLOYEE : "assigned to"
+    EMPLOYEE ||--o{ SALARY_RECORD : "receives"
+    EMPLOYEE ||--o{ EMPLOYEE : "manages"
 
-		COUNTRY {
-			string id PK
-			string name
-			string currencyCode
-		}
+    COUNTRY {
+      string id PK
+      string name
+      string currencyCode
+    }
 
-		DEPARTMENT {
-			string id PK
-			string name
-		}
+    DEPARTMENT {
+      string id PK
+      string name
+    }
 
-		EMPLOYEE {
-			string id PK
-			string employeeCode UK
-			string firstName
-			string lastName
-			string email UK
-			string countryId FK
-			string departmentId FK
-			string jobLevel
-			string managerId FK
-			datetime hireDate
-			string status
-			datetime createdAt
-			datetime updatedAt
-		}
+    JOB_LEVEL {
+      string id PK
+      string code UK
+      string name
+      int rank UK
+    }
 
-		SALARY_RECORD {
+    EMPLOYEE {
+      string id PK
+      string employeeCode UK
+      string firstName
+      string lastName
+      string email UK
+      string countryId FK
+      string departmentId FK
+      string jobLevelId FK
+      string title
 			string id PK
 			string employeeId FK
 			decimal amount
