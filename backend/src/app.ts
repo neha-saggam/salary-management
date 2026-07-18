@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateDepartmentSchema, UpdateDepartmentSchema } from './schemas.js';
 
@@ -9,8 +9,16 @@ export function createApp() {
 
   app.use(express.json());
 
+  // Support both '/employees' and '/api/employees' paths.
+  app.use((req, _res, next) => {
+    if (req.url.startsWith('/api/')) {
+      req.url = req.url.slice(4) || '/';
+    }
+    next();
+  });
+
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -20,20 +28,28 @@ export function createApp() {
 
   // === Employee CRUD Endpoints ===
 
-  // GET /employees - List all employees with pagination
+  // GET /employees - List all employees with pagination + optional title/status filter
   app.get('/employees', async (req: Request, res: Response) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 50;
       const skip = (page - 1) * limit;
+      const titleFilter = req.query.title as string | undefined;
+      const statusFilter = req.query.status as string | undefined;
+
+      const where: Record<string, unknown> = {};
+      if (titleFilter) where.title = { equals: titleFilter, mode: 'insensitive' };
+      if (statusFilter) where.status = statusFilter;
 
       const [employees, total] = await Promise.all([
         prisma.employee.findMany({
+          where,
           skip,
           take: limit,
           include: {
             country: { select: { id: true, name: true, currencyCode: true } },
             department: { select: { id: true, name: true } },
+            jobLevel: { select: { id: true, code: true, name: true, rank: true } },
             manager: true,
             salaryRecords: {
               orderBy: { effectiveDate: 'desc' },
@@ -48,7 +64,7 @@ export function createApp() {
             }
           }
         }),
-        prisma.employee.count()
+        prisma.employee.count({ where })
       ]);
 
       const employeesWithSalary = employees.map((emp) => ({
@@ -75,6 +91,7 @@ export function createApp() {
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
+          jobLevel: { select: { id: true, code: true, name: true, rank: true } },
           manager: true,
           salaryRecords: {
             orderBy: { effectiveDate: 'desc' },
@@ -134,7 +151,8 @@ export function createApp() {
           email: data.email,
           countryId: data.countryId,
           departmentId: data.departmentId,
-          jobLevel: data.jobLevel,
+          jobLevelId: data.jobLevelId,
+          title: data.title || null,
           managerId: data.managerId || null,
           hireDate: new Date(data.hireDate),
           status: data.status || 'ACTIVE'
@@ -142,6 +160,7 @@ export function createApp() {
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
+          jobLevel: { select: { id: true, code: true, name: true, rank: true } },
           manager: true
         }
       });
@@ -191,7 +210,8 @@ export function createApp() {
       if (data.email !== undefined) updateData.email = data.email;
       if (data.countryId !== undefined) updateData.countryId = data.countryId;
       if (data.departmentId !== undefined) updateData.departmentId = data.departmentId;
-      if (data.jobLevel !== undefined) updateData.jobLevel = data.jobLevel;
+      if (data.jobLevelId !== undefined) updateData.jobLevelId = data.jobLevelId;
+      if (data.title !== undefined) updateData.title = data.title;
       if (data.managerId !== undefined) updateData.managerId = data.managerId;
       if (data.hireDate !== undefined) updateData.hireDate = new Date(data.hireDate);
       if (data.status !== undefined) updateData.status = data.status;
@@ -202,6 +222,7 @@ export function createApp() {
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
+          jobLevel: { select: { id: true, code: true, name: true, rank: true } },
           manager: true,
           salaryRecords: {
             orderBy: { effectiveDate: 'desc' },
@@ -354,7 +375,7 @@ export function createApp() {
   // === Department Management Endpoints ===
 
   // GET /departments - List all departments with statistics
-  app.get('/departments', async (req: Request, res: Response) => {
+  app.get('/departments', async (_req: Request, res: Response) => {
     try {
       const departments = await prisma.department.findMany({
         include: {
@@ -427,8 +448,6 @@ export function createApp() {
       const stats = {
         id: department.id,
         name: department.name,
-        createdAt: department.createdAt,
-        updatedAt: department.updatedAt,
         employeeCount: employeesWithSalary.length,
         averageSalaryUsd:
           employeesWithSalary.length > 0
@@ -575,7 +594,7 @@ export function createApp() {
   }
 
   // GET /salary-analytics/summary - Overall salary statistics
-  app.get('/salary-analytics/summary', async (req: Request, res: Response) => {
+  app.get('/salary-analytics/summary', async (_req: Request, res: Response) => {
     try {
       const records = await prisma.salaryRecord.findMany({
         where: { reason: 'HIRE' }, // Only latest HIRE records
@@ -583,8 +602,6 @@ export function createApp() {
       });
 
       const salaries = records.map((r) => Number(r.amountUsd));
-      const sortedSalaries = [...salaries].sort((a, b) => a - b);
-
       const stats = {
         count: salaries.length,
         min: Math.min(...salaries),
@@ -621,7 +638,7 @@ export function createApp() {
   });
 
   // GET /salary-analytics/by-department - Breakdown by department
-  app.get('/salary-analytics/by-department', async (req: Request, res: Response) => {
+  app.get('/salary-analytics/by-department', async (_req: Request, res: Response) => {
     try {
       const departments = await prisma.department.findMany({
         include: {
@@ -663,7 +680,7 @@ export function createApp() {
   });
 
   // GET /salary-analytics/by-country - Breakdown by country
-  app.get('/salary-analytics/by-country', async (req: Request, res: Response) => {
+  app.get('/salary-analytics/by-country', async (_req: Request, res: Response) => {
     try {
       const countries = await prisma.country.findMany({
         include: {
@@ -706,14 +723,15 @@ export function createApp() {
   });
 
   // GET /salary-analytics/by-level - Breakdown by job level
-  app.get('/salary-analytics/by-level', async (req: Request, res: Response) => {
+  app.get('/salary-analytics/by-level', async (_req: Request, res: Response) => {
     try {
-      const levels = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
+      // Fetch all job levels ordered by rank
+      const jobLevels = await prisma.jobLevel.findMany({ orderBy: { rank: 'asc' } });
 
       const analytics = await Promise.all(
-        levels.map(async (level) => {
+        jobLevels.map(async (jl) => {
           const employees = await prisma.employee.findMany({
-            where: { jobLevel: level },
+            where: { jobLevelId: jl.id },
             include: {
               salaryRecords: {
                 where: { reason: 'HIRE' },
@@ -729,7 +747,9 @@ export function createApp() {
             .filter((s) => s > 0);
 
           return {
-            jobLevel: level,
+            jobLevel: jl.code,
+            jobLevelName: jl.name,
+            rank: jl.rank,
             employeeCount: employeesWithSalaries.length,
             averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
             medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
@@ -755,6 +775,7 @@ export function createApp() {
       // Get all salaries by level
       const employees = await prisma.employee.findMany({
         include: {
+          jobLevel: { select: { code: true } },
           department: { select: { name: true } },
           salaryRecords: {
             where: { reason: 'HIRE' },
@@ -764,16 +785,17 @@ export function createApp() {
         }
       });
 
-      // Calculate stats per level
+      // Calculate stats per level code
       const salariesByLevel: Record<string, number[]> = {};
       const statsByLevel: Record<string, { avg: number; stdDev: number }> = {};
 
       employees.forEach((emp) => {
-        if (!salariesByLevel[emp.jobLevel]) salariesByLevel[emp.jobLevel] = [];
+        const code = emp.jobLevel.code;
+        if (!salariesByLevel[code]) salariesByLevel[code] = [];
         const salary = emp.salaryRecords[0]?.amountUsd
           ? Number(emp.salaryRecords[0].amountUsd)
           : 0;
-        if (salary > 0) salariesByLevel[emp.jobLevel].push(salary);
+        if (salary > 0) salariesByLevel[code].push(salary);
       });
 
       Object.entries(salariesByLevel).forEach(([level, salaries]) => {
@@ -790,7 +812,8 @@ export function createApp() {
             : 0;
           if (salary === 0) return null;
 
-          const stats = statsByLevel[emp.jobLevel];
+          const levelCode = emp.jobLevel.code;
+          const stats = statsByLevel[levelCode];
           if (!stats) return null;
 
           const deviation = Math.abs(salary - stats.avg) / stats.stdDev;
@@ -802,7 +825,7 @@ export function createApp() {
               firstName: emp.firstName,
               lastName: emp.lastName,
               email: emp.email,
-              jobLevel: emp.jobLevel,
+              jobLevel: levelCode,
               departmentName: emp.department.name,
               currentSalaryUsd: salary,
               expectedRangeMin: stats.avg - deviationThreshold * stats.stdDev,

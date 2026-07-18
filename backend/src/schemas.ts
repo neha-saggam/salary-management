@@ -2,8 +2,15 @@ import { z } from 'zod';
 
 // Enums
 export const EmployeeStatus = z.enum(['ACTIVE', 'TERMINATED']);
-export const JobLevel = z.enum(['L1', 'L2', 'L3', 'L4', 'L5', 'L6']);
 export const SalaryChangeReason = z.enum(['HIRE', 'ANNUAL_RAISE', 'PROMOTION', 'ADJUSTMENT', 'MARKET_CORRECTION']);
+
+// Job Level schema
+export const JobLevelResponseSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  rank: z.number()
+});
 
 // Employee request/response schemas
 export const CreateEmployeeSchema = z.object({
@@ -13,7 +20,8 @@ export const CreateEmployeeSchema = z.object({
   email: z.string().email(),
   countryId: z.string().uuid(),
   departmentId: z.string().uuid(),
-  jobLevel: JobLevel,
+  jobLevelId: z.string().uuid(),
+  title: z.string().max(100).nullable().optional(),
   managerId: z.string().uuid().nullable().optional(),
   hireDate: z.string().datetime().or(z.date()),
   status: EmployeeStatus.default('ACTIVE')
@@ -29,7 +37,8 @@ export const EmployeeResponseSchema = z.object({
   email: z.string(),
   countryId: z.string(),
   departmentId: z.string(),
-  jobLevel: z.string(),
+  jobLevelId: z.string(),
+  title: z.string().nullable(),
   managerId: z.string().nullable(),
   hireDate: z.date(),
   status: z.string(),
@@ -47,6 +56,7 @@ export const EmployeeWithDetailsSchema = EmployeeResponseSchema.extend({
     id: z.string(),
     name: z.string()
   }),
+  jobLevel: JobLevelResponseSchema,
   manager: EmployeeResponseSchema.nullable(),
   currentSalary: z.object({
     amount: z.any(),

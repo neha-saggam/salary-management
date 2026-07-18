@@ -67,6 +67,16 @@ const BATCH_SIZE = 1000;
 const TOTAL_EMPLOYEES = 10000;
 const TOP_LEVEL_MANAGERS = 60;
 
+// Titles assigned based on job level for top-level managers
+const MANAGER_TITLES_BY_LEVEL: Record<string, string[]> = {
+  L6: ['CEO', 'CTO', 'CFO', 'COO', 'CPO', 'CHRO'],
+  L5: ['VP of Engineering', 'VP of Sales', 'VP of Marketing', 'VP of Finance', 'VP of Operations', 'VP of Product'],
+  L4: ['Director of Engineering', 'Director of Sales', 'Director of Marketing', 'Director of HR', 'Director of Finance'],
+  L3: ['Senior Manager', 'Engineering Manager', 'Sales Manager'],
+  L2: ['Team Lead'],
+  L1: ['Associate Lead']
+};
+
 async function seedReferenceData() {
   console.log('🌍 Seeding countries and FX rates...');
 
@@ -140,10 +150,33 @@ async function seedReferenceData() {
 
   console.log(`✓ Created ${createdDepartments.length} departments`);
 
+  console.log('🎯 Seeding job levels...');
+  const jobLevels = [
+    { code: 'L1', name: 'Associate', rank: 1 },
+    { code: 'L2', name: 'Mid-Level', rank: 2 },
+    { code: 'L3', name: 'Senior', rank: 3 },
+    { code: 'L4', name: 'Staff', rank: 4 },
+    { code: 'L5', name: 'Principal', rank: 5 },
+    { code: 'L6', name: 'Executive', rank: 6 }
+  ];
+
+  const createdJobLevels = await Promise.all(
+    jobLevels.map((jl) =>
+      prisma.jobLevel.upsert({
+        where: { code: jl.code },
+        update: { name: jl.name, rank: jl.rank },
+        create: jl
+      })
+    )
+  );
+
+  console.log(`✓ Created ${createdJobLevels.length} job levels`);
+
   return {
     countries: createdCountries,
     departments: createdDepartments,
-    fxRates: createdFxRates
+    fxRates: createdFxRates,
+    jobLevels: createdJobLevels
   };
 }
 
@@ -170,7 +203,7 @@ async function seedSalaryHistory(
 
   // Fetch all employees and FX rates
   const employees = await prisma.employee.findMany({
-    select: { id: true, hireDate: true, jobLevel: true, countryId: true }
+    select: { id: true, hireDate: true, countryId: true, jobLevel: { select: { code: true } } }
   });
 
   const fxRates = await prisma.fxRate.findMany();
@@ -197,10 +230,11 @@ async function seedSalaryHistory(
       const currencyCode = countryInfo.currencyCode;
       const fxRate = fxRateMap.get(currencyCode) || new Decimal('1.0');
       const countryKey = countryNameToKey[countryInfo.name];
-      
+      const jobLevelCode = emp.jobLevel.code;
+
       const band =
         salaryBandsByCountry[countryKey as keyof typeof salaryBandsByCountry]?.[
-          jobLevel as keyof (typeof salaryBandsByCountry)[string]
+          jobLevelCode as keyof (typeof salaryBandsByCountry)[string]
         ];
 
       if (!band) continue;
@@ -285,6 +319,9 @@ async function seedEmployees(
   const countryIds = refData.countries.map((c) => c.id);
   const departmentIds = refData.departments.map((d) => d.id);
 
+  // Build jobLevel code -> id map
+  const jobLevelMap = new Map(refData.jobLevels.map((jl) => [jl.code, jl.id]));
+
   // Weight distribution: more junior employees, fewer senior
   const levelWeights: Record<string, number> = {
     L1: 0.30,
@@ -305,12 +342,16 @@ async function seedEmployees(
     return 'L1';
   }
 
-  // Step 1: Create top-level managers (no manager)
+  // Step 1: Create top-level managers (no manager) — one at L6 is CEO
   console.log(`  Creating ${TOP_LEVEL_MANAGERS} top-level managers...`);
   const managers: Array<{ id: string; countryId: string; departmentId: string }> = [];
 
   const managerBatch = [];
   for (let i = 0; i < TOP_LEVEL_MANAGERS; i++) {
+    // First manager is CEO at L6, rest are L5 VPs
+    const levelCode = i === 0 ? 'L6' : 'L5';
+    const titles = MANAGER_TITLES_BY_LEVEL[levelCode];
+    const title = titles[i % titles.length];
     managerBatch.push({
       employeeCode: `MGR${String(i + 1).padStart(5, '0')}`,
       firstName: faker.person.firstName(),
@@ -318,7 +359,8 @@ async function seedEmployees(
       email: `mgr${String(i + 1).padStart(5, '0')}@acme.com`,
       countryId: faker.helpers.arrayElement(countryIds),
       departmentId: faker.helpers.arrayElement(departmentIds),
-      jobLevel: 'L5', // Managers are at L5
+      jobLevelId: jobLevelMap.get(levelCode)!,
+      title,
       managerId: null,
       hireDate: faker.date.past({ years: 8 }),
       status: 'ACTIVE' as const
@@ -329,9 +371,9 @@ async function seedEmployees(
     data: managerBatch
   });
 
-  // Fetch the created managers to get their IDs
+  // Fetch the created managers to get their IDs (both L5 and L6 top-level)
   const dbManagers = await prisma.employee.findMany({
-    where: { jobLevel: 'L5', managerId: null },
+    where: { managerId: null },
     select: { id: true, countryId: true, departmentId: true }
   });
 
@@ -373,7 +415,8 @@ async function seedEmployees(
         email: `emp${String(i + TOP_LEVEL_MANAGERS + 1).padStart(7, '0')}@acme.com`,
         countryId,
         departmentId,
-        jobLevel: level,
+        jobLevelId: jobLevelMap.get(level)!,
+        title: null,
         managerId,
         hireDate: faker.date.past({ years: 10 }),
         status: 'ACTIVE' as const

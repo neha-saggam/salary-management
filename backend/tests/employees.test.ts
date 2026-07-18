@@ -9,29 +9,24 @@ const app = createApp();
 let testCountryId: string;
 let testDepartmentId: string;
 let testManagerId: string;
+let testJobLevelId: string;
 let testEmployeeId: string;
 
 describe('Employee CRUD API', () => {
   beforeAll(async () => {
-    // Create test data
-    const country = await prisma.country.findFirst({
-      select: { id: true }
-    });
-    const department = await prisma.department.findFirst({
-      select: { id: true }
-    });
-    const manager = await prisma.employee.findFirst({
-      where: { managerId: null },
-      select: { id: true }
-    });
+    const country = await prisma.country.findFirst({ select: { id: true } });
+    const department = await prisma.department.findFirst({ select: { id: true } });
+    const manager = await prisma.employee.findFirst({ where: { managerId: null }, select: { id: true } });
+    const jobLevel = await prisma.jobLevel.findFirst({ where: { code: 'L3' }, select: { id: true } });
 
-    if (!country || !department || !manager) {
+    if (!country || !department || !manager || !jobLevel) {
       throw new Error('Test data not found. Please run seed first.');
     }
 
     testCountryId = country.id;
     testDepartmentId = department.id;
     testManagerId = manager.id;
+    testJobLevelId = jobLevel.id;
   });
 
   afterAll(async () => {
@@ -50,7 +45,7 @@ describe('Employee CRUD API', () => {
           email: `test-${timestamp}@example.com`,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L3',
+          jobLevelId: testJobLevelId,
           managerId: testManagerId,
           hireDate: new Date().toISOString(),
           status: 'ACTIVE'
@@ -74,7 +69,7 @@ describe('Employee CRUD API', () => {
           email: 'invalid-email',
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L2',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -96,7 +91,7 @@ describe('Employee CRUD API', () => {
           email,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L1',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -110,7 +105,7 @@ describe('Employee CRUD API', () => {
           email,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L1',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -129,7 +124,7 @@ describe('Employee CRUD API', () => {
           email: `default-${timestamp}@example.com`,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L4',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -157,6 +152,26 @@ describe('Employee CRUD API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeLessThanOrEqual(50);
+    });
+
+    it('should include jobLevel object with code, name, rank', async () => {
+      const response = await request(app).get('/employees').query({ limit: 1 });
+
+      expect(response.status).toBe(200);
+      const emp = response.body.data[0];
+      expect(emp.jobLevel).toHaveProperty('code');
+      expect(emp.jobLevel).toHaveProperty('name');
+      expect(emp.jobLevel).toHaveProperty('rank');
+    });
+
+    it('should filter by title (CEO)', async () => {
+      const response = await request(app).get('/employees').query({ title: 'CEO' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      response.body.data.forEach((emp: any) => {
+        expect(emp.title.toLowerCase()).toBe('ceo');
+      });
     });
 
     it('should include current salary in response', async () => {
@@ -217,12 +232,12 @@ describe('Employee CRUD API', () => {
         .patch(`/employees/${testEmployeeId}`)
         .send({
           firstName: 'Jonathan',
-          jobLevel: 'L4'
+          jobLevelId: testJobLevelId
         });
 
       expect(response.status).toBe(200);
       expect(response.body.firstName).toBe('Jonathan');
-      expect(response.body.jobLevel).toBe('L4');
+      expect(response.body.jobLevel).toHaveProperty('code');
     });
 
     it('should return 404 for non-existent employee', async () => {
@@ -254,7 +269,7 @@ describe('Employee CRUD API', () => {
           email: email1,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L1',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -268,7 +283,7 @@ describe('Employee CRUD API', () => {
           email: email2,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L1',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
@@ -310,7 +325,7 @@ describe('Employee CRUD API', () => {
           email,
           countryId: testCountryId,
           departmentId: testDepartmentId,
-          jobLevel: 'L1',
+          jobLevelId: testJobLevelId,
           hireDate: new Date().toISOString()
         });
 
