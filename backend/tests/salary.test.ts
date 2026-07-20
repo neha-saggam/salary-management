@@ -18,7 +18,7 @@ describe('Salary History API', () => {
     // Get an employee with salary history
     const employee = await prisma.employee.findFirst({
       where: { salaryRecords: { some: {} } },
-      select: { id: true, email: true, salaryRecords: { take: 1 } }
+      select: { id: true, email: true, salaryRecords: { take: 1 } },
     });
 
     if (!employee || employee.salaryRecords.length === 0) {
@@ -31,7 +31,7 @@ describe('Salary History API', () => {
     // Get salary record IDs for this employee
     const records = await prisma.salaryRecord.findMany({
       where: { employeeId: testEmployeeId },
-      select: { id: true }
+      select: { id: true },
     });
     salaryRecordIds = records.map((r) => r.id);
   });
@@ -46,7 +46,8 @@ describe('Salary History API', () => {
 
   describe('GET /employees/:id/salary-history', () => {
     it('should get salary history for an employee', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}/salary-history`)
+      const response = await request(app)
+        .get(`/employees/${testEmployeeId}/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -57,7 +58,8 @@ describe('Salary History API', () => {
     });
 
     it('should return employee details with country and department', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}/salary-history`)
+      const response = await request(app)
+        .get(`/employees/${testEmployeeId}/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -68,7 +70,8 @@ describe('Salary History API', () => {
     });
 
     it('should order records by effectiveDate descending', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}/salary-history`)
+      const response = await request(app)
+        .get(`/employees/${testEmployeeId}/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -81,7 +84,8 @@ describe('Salary History API', () => {
     });
 
     it('should include salary record details', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}/salary-history`)
+      const response = await request(app)
+        .get(`/employees/${testEmployeeId}/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -95,7 +99,8 @@ describe('Salary History API', () => {
     });
 
     it('should have HIRE as first record (oldest)', async () => {
-      const response = await request(app).get(`/employees/${testEmployeeId}/salary-history`)
+      const response = await request(app)
+        .get(`/employees/${testEmployeeId}/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -105,9 +110,8 @@ describe('Salary History API', () => {
     });
 
     it('should return 404 for non-existent employee', async () => {
-      const response = await request(app).get(
-        `/employees/00000000-0000-0000-0000-000000000000/salary-history`
-      )
+      const response = await request(app)
+        .get(`/employees/00000000-0000-0000-0000-000000000000/salary-history`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(404);
@@ -131,7 +135,8 @@ describe('Salary History API', () => {
     });
 
     it('should include pagination metadata', async () => {
-      const response = await request(app).get('/salary-records')
+      const response = await request(app)
+        .get('/salary-records')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -209,7 +214,9 @@ describe('Salary History API', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeGreaterThanOrEqual(1);
-      expect(response.body.data.every((r: any) => r.employeeId === testEmployeeId && r.reason === 'HIRE')).toBe(true);
+      expect(
+        response.body.data.every((r: any) => r.employeeId === testEmployeeId && r.reason === 'HIRE')
+      ).toBe(true);
     });
 
     it('should filter by dateFrom', async () => {
@@ -260,7 +267,7 @@ describe('Salary History API', () => {
         .query({
           dateFrom: twoYearsAgo.toISOString(),
           dateTo: today.toISOString(),
-          limit: 100
+          limit: 100,
         });
 
       expect(response.status).toBe(200);

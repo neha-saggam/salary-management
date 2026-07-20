@@ -19,7 +19,7 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 85000, max: 110000 },
     L4: { level: 'L4', min: 110000, max: 145000 },
     L5: { level: 'L5', min: 145000, max: 190000 },
-    L6: { level: 'L6', min: 190000, max: 250000 }
+    L6: { level: 'L6', min: 190000, max: 250000 },
   },
   India: {
     L1: { level: 'L1', min: 8000, max: 12000 },
@@ -27,7 +27,7 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 18000, max: 28000 },
     L4: { level: 'L4', min: 28000, max: 45000 },
     L5: { level: 'L5', min: 45000, max: 70000 },
-    L6: { level: 'L6', min: 70000, max: 110000 }
+    L6: { level: 'L6', min: 70000, max: 110000 },
   },
   UK: {
     L1: { level: 'L1', min: 40000, max: 52000 },
@@ -35,7 +35,7 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 68000, max: 88000 },
     L4: { level: 'L4', min: 88000, max: 116000 },
     L5: { level: 'L5', min: 116000, max: 152000 },
-    L6: { level: 'L6', min: 152000, max: 200000 }
+    L6: { level: 'L6', min: 152000, max: 200000 },
   },
   Germany: {
     L1: { level: 'L1', min: 38000, max: 48000 },
@@ -43,7 +43,7 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 62000, max: 80000 },
     L4: { level: 'L4', min: 80000, max: 105000 },
     L5: { level: 'L5', min: 105000, max: 138000 },
-    L6: { level: 'L6', min: 138000, max: 180000 }
+    L6: { level: 'L6', min: 138000, max: 180000 },
   },
   Canada: {
     L1: { level: 'L1', min: 48000, max: 62000 },
@@ -51,7 +51,7 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 80000, max: 104000 },
     L4: { level: 'L4', min: 104000, max: 137000 },
     L5: { level: 'L5', min: 137000, max: 180000 },
-    L6: { level: 'L6', min: 180000, max: 236000 }
+    L6: { level: 'L6', min: 180000, max: 236000 },
   },
   Singapore: {
     L1: { level: 'L1', min: 50000, max: 65000 },
@@ -59,8 +59,8 @@ const salaryBandsByCountry: Record<string, Record<string, SalaryBand>> = {
     L3: { level: 'L3', min: 85000, max: 110000 },
     L4: { level: 'L4', min: 110000, max: 145000 },
     L5: { level: 'L5', min: 145000, max: 190000 },
-    L6: { level: 'L6', min: 190000, max: 250000 }
-  }
+    L6: { level: 'L6', min: 190000, max: 250000 },
+  },
 };
 
 const JOB_LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
@@ -71,11 +71,24 @@ const TOP_LEVEL_MANAGERS = 60;
 // Titles assigned based on job level for top-level managers
 const MANAGER_TITLES_BY_LEVEL: Record<string, string[]> = {
   L6: ['CEO', 'CTO', 'CFO', 'COO', 'CPO', 'CHRO'],
-  L5: ['VP of Engineering', 'VP of Sales', 'VP of Marketing', 'VP of Finance', 'VP of Operations', 'VP of Product'],
-  L4: ['Director of Engineering', 'Director of Sales', 'Director of Marketing', 'Director of HR', 'Director of Finance'],
+  L5: [
+    'VP of Engineering',
+    'VP of Sales',
+    'VP of Marketing',
+    'VP of Finance',
+    'VP of Operations',
+    'VP of Product',
+  ],
+  L4: [
+    'Director of Engineering',
+    'Director of Sales',
+    'Director of Marketing',
+    'Director of HR',
+    'Director of Finance',
+  ],
   L3: ['Senior Manager', 'Engineering Manager', 'Sales Manager'],
   L2: ['Team Lead'],
-  L1: ['Associate Lead']
+  L1: ['Associate Lead'],
 };
 
 async function seedReferenceData() {
@@ -87,7 +100,7 @@ async function seedReferenceData() {
     { name: 'United Kingdom', currencyCode: 'GBP' },
     { name: 'Germany', currencyCode: 'EUR' },
     { name: 'Canada', currencyCode: 'CAD' },
-    { name: 'Singapore', currencyCode: 'SGD' }
+    { name: 'Singapore', currencyCode: 'SGD' },
   ];
 
   const createdCountries = await Promise.all(
@@ -95,7 +108,7 @@ async function seedReferenceData() {
       prisma.country.upsert({
         where: { name: c.name },
         update: {},
-        create: c
+        create: c,
       })
     )
   );
@@ -108,7 +121,7 @@ async function seedReferenceData() {
     { currencyCode: 'GBP', rateToUsd: new Decimal('1.27') },
     { currencyCode: 'EUR', rateToUsd: new Decimal('1.10') },
     { currencyCode: 'CAD', rateToUsd: new Decimal('0.73') },
-    { currencyCode: 'SGD', rateToUsd: new Decimal('0.74') }
+    { currencyCode: 'SGD', rateToUsd: new Decimal('0.74') },
   ];
 
   const createdFxRates = await Promise.all(
@@ -119,8 +132,8 @@ async function seedReferenceData() {
         create: {
           currencyCode: f.currencyCode,
           rateToUsd: f.rateToUsd,
-          asOfDate: new Date()
-        }
+          asOfDate: new Date(),
+        },
       })
     )
   );
@@ -136,7 +149,7 @@ async function seedReferenceData() {
     { name: 'HR' },
     { name: 'Finance' },
     { name: 'Operations' },
-    { name: 'Product' }
+    { name: 'Product' },
   ];
 
   const createdDepartments = await Promise.all(
@@ -144,7 +157,7 @@ async function seedReferenceData() {
       prisma.department.upsert({
         where: { name: d.name },
         update: {},
-        create: d
+        create: d,
       })
     )
   );
@@ -158,7 +171,7 @@ async function seedReferenceData() {
     { code: 'L3', name: 'Senior', rank: 3 },
     { code: 'L4', name: 'Staff', rank: 4 },
     { code: 'L5', name: 'Principal', rank: 5 },
-    { code: 'L6', name: 'Executive', rank: 6 }
+    { code: 'L6', name: 'Executive', rank: 6 },
   ];
 
   const createdJobLevels = await Promise.all(
@@ -166,7 +179,7 @@ async function seedReferenceData() {
       prisma.jobLevel.upsert({
         where: { code: jl.code },
         update: { name: jl.name, rank: jl.rank },
-        create: jl
+        create: jl,
       })
     )
   );
@@ -177,13 +190,11 @@ async function seedReferenceData() {
     countries: createdCountries,
     departments: createdDepartments,
     fxRates: createdFxRates,
-    jobLevels: createdJobLevels
+    jobLevels: createdJobLevels,
   };
 }
 
-async function seedSalaryHistory(
-  refData: Awaited<ReturnType<typeof seedReferenceData>>
-) {
+async function seedSalaryHistory(refData: Awaited<ReturnType<typeof seedReferenceData>>) {
   console.log('\n💰 Seeding salary history...');
 
   // Map country IDs to country names and currency codes
@@ -195,16 +206,16 @@ async function seedSalaryHistory(
   // Map country names to salary band keys
   const countryNameToKey: Record<string, string> = {
     'United States': 'US',
-    'India': 'India',
+    India: 'India',
     'United Kingdom': 'UK',
-    'Germany': 'Germany',
-    'Canada': 'Canada',
-    'Singapore': 'Singapore'
+    Germany: 'Germany',
+    Canada: 'Canada',
+    Singapore: 'Singapore',
   };
 
   // Fetch all employees and FX rates
   const employees = await prisma.employee.findMany({
-    select: { id: true, hireDate: true, countryId: true, jobLevel: { select: { code: true } } }
+    select: { id: true, hireDate: true, countryId: true, jobLevel: { select: { code: true } } },
   });
 
   const fxRates = await prisma.fxRate.findMany();
@@ -225,7 +236,7 @@ async function seedSalaryHistory(
       const countryId = emp.countryId;
       const jobLevel = emp.jobLevel;
       const countryInfo = countryMap.get(countryId);
-      
+
       if (!countryInfo) continue;
 
       const currencyCode = countryInfo.currencyCode;
@@ -241,8 +252,7 @@ async function seedSalaryHistory(
       if (!band) continue;
 
       // HIRE record: base band ± 15% variance
-      const hireAmount =
-        band.min + (band.max - band.min) * (0.5 + (Math.random() - 0.5) * 0.3);
+      const hireAmount = band.min + (band.max - band.min) * (0.5 + (Math.random() - 0.5) * 0.3);
       const hireAmountUsd = new Decimal(hireAmount).times(fxRate).toDecimalPlaces(2);
 
       salaryRecordBatch.push({
@@ -251,7 +261,7 @@ async function seedSalaryHistory(
         currency: currencyCode,
         amountUsd: hireAmountUsd,
         effectiveDate: emp.hireDate,
-        reason: 'HIRE' as const
+        reason: 'HIRE' as const,
       });
 
       // Generate 0-3 additional records (raises and promotions)
@@ -278,9 +288,7 @@ async function seedSalaryHistory(
           currentAmount *= 1.03 + Math.random() * 0.05;
         }
 
-        const currentAmountUsd = new Decimal(currentAmount)
-          .times(fxRate)
-          .toDecimalPlaces(2);
+        const currentAmountUsd = new Decimal(currentAmount).times(fxRate).toDecimalPlaces(2);
 
         salaryRecordBatch.push({
           employeeId: emp.id,
@@ -288,7 +296,7 @@ async function seedSalaryHistory(
           currency: currencyCode,
           amountUsd: currentAmountUsd,
           effectiveDate: currentDate,
-          reason: isPromotion ? ('PROMOTION' as const) : ('ANNUAL_RAISE' as const)
+          reason: isPromotion ? ('PROMOTION' as const) : ('ANNUAL_RAISE' as const),
         });
       }
     }
@@ -309,9 +317,7 @@ async function seedSalaryHistory(
   console.log(`✓ Created ${totalSalaryRecords} salary history records`);
 }
 
-async function seedEmployees(
-  refData: Awaited<ReturnType<typeof seedReferenceData>>
-) {
+async function seedEmployees(refData: Awaited<ReturnType<typeof seedReferenceData>>) {
   console.log('\n👥 Seeding employees...');
 
   // Set fixed seed for reproducibility
@@ -325,12 +331,12 @@ async function seedEmployees(
 
   // Weight distribution: more junior employees, fewer senior
   const levelWeights: Record<string, number> = {
-    L1: 0.30,
+    L1: 0.3,
     L2: 0.25,
-    L3: 0.20,
+    L3: 0.2,
     L4: 0.15,
     L5: 0.07,
-    L6: 0.03
+    L6: 0.03,
   };
 
   function getWeightedLevel(): string {
@@ -364,18 +370,18 @@ async function seedEmployees(
       title,
       managerId: null,
       hireDate: faker.date.past({ years: 8 }),
-      status: 'ACTIVE' as const
+      status: 'ACTIVE' as const,
     });
   }
 
   const createdManagers = await prisma.employee.createMany({
-    data: managerBatch
+    data: managerBatch,
   });
 
   // Fetch the created managers to get their IDs (both L5 and L6 top-level)
   const dbManagers = await prisma.employee.findMany({
     where: { managerId: null },
-    select: { id: true, countryId: true, departmentId: true }
+    select: { id: true, countryId: true, departmentId: true },
   });
 
   for (const mgr of dbManagers) {
@@ -420,7 +426,7 @@ async function seedEmployees(
         title: null,
         managerId,
         hireDate: faker.date.past({ years: 10 }),
-        status: 'ACTIVE' as const
+        status: 'ACTIVE' as const,
       });
     }
 
@@ -453,14 +459,14 @@ async function seedDefaultUsers() {
   console.log('\n🔐 Seeding default users...');
   const users = [
     { email: 'admin@acme.com', password: 'Admin1234!', role: 'HR_ADMIN' as const },
-    { email: 'hr@acme.com',    password: 'HrUser123!', role: 'HR_MANAGER' as const }
+    { email: 'hr@acme.com', password: 'HrUser123!', role: 'HR_MANAGER' as const },
   ];
   for (const u of users) {
     const passwordHash = await bcrypt.hash(u.password, 12);
     await prisma.user.upsert({
-      where:  { email: u.email },
+      where: { email: u.email },
       update: { passwordHash, role: u.role },
-      create: { email: u.email, passwordHash, role: u.role }
+      create: { email: u.email, passwordHash, role: u.role },
     });
   }
   console.log(`✓ Created ${users.length} default users (admin@acme.com / hr@acme.com)`);

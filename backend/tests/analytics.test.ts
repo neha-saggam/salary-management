@@ -20,7 +20,8 @@ describe('Salary Analytics API', () => {
 
   describe('GET /salary-analytics/summary', () => {
     it('should return overall salary statistics', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -33,7 +34,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have valid statistics', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -49,7 +51,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have min <= avg <= max', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -59,7 +62,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have median <= avg for right-skewed salary distribution', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -69,7 +73,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have p25 <= median <= p75', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -79,7 +84,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should count all departments and countries', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -88,20 +94,24 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have total payroll equal to sum of all salaries', async () => {
-      const response = await request(app).get('/salary-analytics/summary')
+      const response = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       const { totalEmployees, averageSalaryUsd, totalPayrollUsd } = response.body;
       const calculatedPayroll = Number(averageSalaryUsd) * totalEmployees;
       // Allow 1% rounding error
-      expect(Math.abs(Number(totalPayrollUsd) - calculatedPayroll) / calculatedPayroll).toBeLessThan(0.01);
+      expect(
+        Math.abs(Number(totalPayrollUsd) - calculatedPayroll) / calculatedPayroll
+      ).toBeLessThan(0.01);
     });
   });
 
   describe('GET /salary-analytics/by-department', () => {
     it('should return analytics for all departments', async () => {
-      const response = await request(app).get('/salary-analytics/by-department')
+      const response = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -110,7 +120,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should include all required fields', async () => {
-      const response = await request(app).get('/salary-analytics/by-department')
+      const response = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -126,18 +137,22 @@ describe('Salary Analytics API', () => {
     });
 
     it('should be ordered alphabetically by department name', async () => {
-      const response = await request(app).get('/salary-analytics/by-department')
+      const response = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       const depts = response.body;
       for (let i = 0; i < depts.length - 1; i++) {
-        expect(depts[i].departmentName.localeCompare(depts[i + 1].departmentName)).toBeLessThanOrEqual(0);
+        expect(
+          depts[i].departmentName.localeCompare(depts[i + 1].departmentName)
+        ).toBeLessThanOrEqual(0);
       }
     });
 
     it('should have valid salary relationships (min <= avg <= max)', async () => {
-      const response = await request(app).get('/salary-analytics/by-department')
+      const response = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -150,7 +165,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have payroll = average * count', async () => {
-      const response = await request(app).get('/salary-analytics/by-department')
+      const response = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -166,7 +182,8 @@ describe('Salary Analytics API', () => {
 
   describe('GET /salary-analytics/by-country', () => {
     it('should return analytics for all countries', async () => {
-      const response = await request(app).get('/salary-analytics/by-country')
+      const response = await request(app)
+        .get('/salary-analytics/by-country')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -175,7 +192,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should include currency code for each country', async () => {
-      const response = await request(app).get('/salary-analytics/by-country')
+      const response = await request(app)
+        .get('/salary-analytics/by-country')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -186,18 +204,22 @@ describe('Salary Analytics API', () => {
     });
 
     it('should be ordered alphabetically by country name', async () => {
-      const response = await request(app).get('/salary-analytics/by-country')
+      const response = await request(app)
+        .get('/salary-analytics/by-country')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
       const countries = response.body;
       for (let i = 0; i < countries.length - 1; i++) {
-        expect(countries[i].countryName.localeCompare(countries[i + 1].countryName)).toBeLessThanOrEqual(0);
+        expect(
+          countries[i].countryName.localeCompare(countries[i + 1].countryName)
+        ).toBeLessThanOrEqual(0);
       }
     });
 
     it('should have different salary ranges across countries', async () => {
-      const response = await request(app).get('/salary-analytics/by-country')
+      const response = await request(app)
+        .get('/salary-analytics/by-country')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -214,7 +236,8 @@ describe('Salary Analytics API', () => {
 
   describe('GET /salary-analytics/by-level', () => {
     it('should return analytics for all job levels', async () => {
-      const response = await request(app).get('/salary-analytics/by-level')
+      const response = await request(app)
+        .get('/salary-analytics/by-level')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -223,7 +246,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should include levels L1 through L6 with employees', async () => {
-      const response = await request(app).get('/salary-analytics/by-level')
+      const response = await request(app)
+        .get('/salary-analytics/by-level')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -233,11 +257,14 @@ describe('Salary Analytics API', () => {
     });
 
     it('should show salary progression (L1 < L2 < L3...)', async () => {
-      const response = await request(app).get('/salary-analytics/by-level')
+      const response = await request(app)
+        .get('/salary-analytics/by-level')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
-      const levelMap = new Map(response.body.map((l: any) => [l.jobLevel, Number(l.averageSalaryUsd)]));
+      const levelMap = new Map(
+        response.body.map((l: any) => [l.jobLevel, Number(l.averageSalaryUsd)])
+      );
 
       // Check ascending order
       for (let i = 1; i <= 5; i++) {
@@ -250,7 +277,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should only include levels with employees', async () => {
-      const response = await request(app).get('/salary-analytics/by-level')
+      const response = await request(app)
+        .get('/salary-analytics/by-level')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -262,7 +290,8 @@ describe('Salary Analytics API', () => {
 
   describe('GET /salary-analytics/outliers', () => {
     it('should identify salary outliers', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -273,7 +302,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should use default threshold of 2 standard deviations', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -281,7 +311,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should respect custom threshold parameter', async () => {
-      const response = await request(app).get('/salary-analytics/outliers?threshold=1.5')
+      const response = await request(app)
+        .get('/salary-analytics/outliers?threshold=1.5')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -289,9 +320,11 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have more outliers with lower threshold', async () => {
-      const threshold1 = await request(app).get('/salary-analytics/outliers?threshold=1')
+      const threshold1 = await request(app)
+        .get('/salary-analytics/outliers?threshold=1')
         .set('Authorization', `Bearer ${authToken}`);
-      const threshold2 = await request(app).get('/salary-analytics/outliers?threshold=2')
+      const threshold2 = await request(app)
+        .get('/salary-analytics/outliers?threshold=2')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(threshold1.status).toBe(200);
@@ -300,7 +333,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should include outlier details', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -317,7 +351,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should be ordered by deviation (highest first)', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -330,7 +365,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should show expected range for each outlier', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -342,7 +378,8 @@ describe('Salary Analytics API', () => {
     });
 
     it('should correctly calculate deviation percentage', async () => {
-      const response = await request(app).get('/salary-analytics/outliers')
+      const response = await request(app)
+        .get('/salary-analytics/outliers')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
@@ -357,25 +394,32 @@ describe('Salary Analytics API', () => {
 
   describe('Analytics Consistency', () => {
     it('should have consistent total payroll across endpoints', async () => {
-      const summary = await request(app).get('/salary-analytics/summary')
+      const summary = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
-      const byDept = await request(app).get('/salary-analytics/by-department')
+      const byDept = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(summary.status).toBe(200);
       expect(byDept.status).toBe(200);
 
       const summaryPayroll = Number(summary.body.totalPayrollUsd);
-      const deptPayroll = byDept.body.reduce((sum: number, d: any) => sum + Number(d.totalPayrollUsd), 0);
+      const deptPayroll = byDept.body.reduce(
+        (sum: number, d: any) => sum + Number(d.totalPayrollUsd),
+        0
+      );
 
       // Allow 1% rounding error
       expect(Math.abs(summaryPayroll - deptPayroll) / summaryPayroll).toBeLessThan(0.01);
     });
 
     it('should have consistent employee count across endpoints', async () => {
-      const summary = await request(app).get('/salary-analytics/summary')
+      const summary = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
-      const byDept = await request(app).get('/salary-analytics/by-department')
+      const byDept = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(summary.status).toBe(200);
@@ -388,9 +432,11 @@ describe('Salary Analytics API', () => {
     });
 
     it('should have consistent salary ranges', async () => {
-      const summary = await request(app).get('/salary-analytics/summary')
+      const summary = await request(app)
+        .get('/salary-analytics/summary')
         .set('Authorization', `Bearer ${authToken}`);
-      const byDept = await request(app).get('/salary-analytics/by-department')
+      const byDept = await request(app)
+        .get('/salary-analytics/by-department')
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(summary.status).toBe(200);
@@ -399,7 +445,9 @@ describe('Salary Analytics API', () => {
       const summaryMin = Number(summary.body.minSalaryUsd);
       const summaryMax = Number(summary.body.maxSalaryUsd);
 
-      const deptMins = byDept.body.map((d: any) => Number(d.minSalaryUsd)).filter((m: number) => m > 0);
+      const deptMins = byDept.body
+        .map((d: any) => Number(d.minSalaryUsd))
+        .filter((m: number) => m > 0);
       const deptMaxs = byDept.body.map((d: any) => Number(d.maxSalaryUsd));
 
       expect(summaryMin).toEqual(Math.min(...deptMins));

@@ -15,7 +15,9 @@
     "build": "yarn workspaces run build",
     "db:up": "docker-compose up -d postgres",
     "db:down": "docker-compose down",
-    "db:reset": "docker-compose down -v && docker-compose up -d postgres"
+    "db:reset": "docker-compose down -v && docker-compose up -d postgres",
+    "prod:up": "docker-compose -f docker-compose.prod.yml up -d --build",
+    "prod:down": "docker-compose -f docker-compose.prod.yml down"
   },
   "devDependencies": {
     "concurrently": "^8.2.1"

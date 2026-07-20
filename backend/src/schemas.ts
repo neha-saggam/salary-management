@@ -2,14 +2,20 @@ import { z } from 'zod';
 
 // Enums
 export const EmployeeStatus = z.enum(['ACTIVE', 'TERMINATED']);
-export const SalaryChangeReason = z.enum(['HIRE', 'ANNUAL_RAISE', 'PROMOTION', 'ADJUSTMENT', 'MARKET_CORRECTION']);
+export const SalaryChangeReason = z.enum([
+  'HIRE',
+  'ANNUAL_RAISE',
+  'PROMOTION',
+  'ADJUSTMENT',
+  'MARKET_CORRECTION',
+]);
 
 // Job Level schema
 export const JobLevelResponseSchema = z.object({
   id: z.string().uuid(),
   code: z.string(),
   name: z.string(),
-  rank: z.number()
+  rank: z.number(),
 });
 
 // Employee request/response schemas
@@ -24,7 +30,7 @@ export const CreateEmployeeSchema = z.object({
   title: z.string().max(100).nullable().optional(),
   managerId: z.string().uuid().nullable().optional(),
   hireDate: z.string().datetime().or(z.date()),
-  status: EmployeeStatus.default('ACTIVE')
+  status: EmployeeStatus.default('ACTIVE'),
 });
 
 export const UpdateEmployeeSchema = CreateEmployeeSchema.partial();
@@ -43,28 +49,30 @@ export const EmployeeResponseSchema = z.object({
   hireDate: z.date(),
   status: z.string(),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 });
 
 export const EmployeeWithDetailsSchema = EmployeeResponseSchema.extend({
   country: z.object({
     id: z.string(),
     name: z.string(),
-    currencyCode: z.string()
+    currencyCode: z.string(),
   }),
   department: z.object({
     id: z.string(),
-    name: z.string()
+    name: z.string(),
   }),
   jobLevel: JobLevelResponseSchema,
   manager: EmployeeResponseSchema.nullable(),
-  currentSalary: z.object({
-    amount: z.any(),
-    currency: z.string(),
-    amountUsd: z.any(),
-    effectiveDate: z.date(),
-    reason: z.string()
-  }).nullable()
+  currentSalary: z
+    .object({
+      amount: z.any(),
+      currency: z.string(),
+      amountUsd: z.any(),
+      effectiveDate: z.date(),
+      reason: z.string(),
+    })
+    .nullable(),
 });
 
 export const EmployeeListSchema = z.array(EmployeeWithDetailsSchema);
@@ -79,7 +87,7 @@ export const SalaryRecordResponseSchema = z.object({
   effectiveDate: z.date(),
   reason: SalaryChangeReason,
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 });
 
 export const SalaryRecordWithEmployeeSchema = SalaryRecordResponseSchema.extend({
@@ -92,13 +100,13 @@ export const SalaryRecordWithEmployeeSchema = SalaryRecordResponseSchema.extend(
     country: z.object({
       id: z.string(),
       name: z.string(),
-      currencyCode: z.string()
+      currencyCode: z.string(),
     }),
     department: z.object({
       id: z.string(),
-      name: z.string()
-    })
-  })
+      name: z.string(),
+    }),
+  }),
 });
 
 export const SalaryRecordsQuerySchema = z.object({
@@ -107,17 +115,17 @@ export const SalaryRecordsQuerySchema = z.object({
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
   page: z.string().transform(Number).optional(),
-  limit: z.string().transform(Number).optional()
+  limit: z.string().transform(Number).optional(),
 });
 
 export const SalaryHistoryResponseSchema = z.object({
   employee: EmployeeWithDetailsSchema,
-  records: z.array(SalaryRecordResponseSchema)
+  records: z.array(SalaryRecordResponseSchema),
 });
 
 // Department schemas
 export const CreateDepartmentSchema = z.object({
-  name: z.string().min(1).max(100)
+  name: z.string().min(1).max(100),
 });
 
 export const UpdateDepartmentSchema = CreateDepartmentSchema.partial();
@@ -126,13 +134,13 @@ export const DepartmentResponseSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   createdAt: z.date(),
-  updatedAt: z.date()
+  updatedAt: z.date(),
 });
 
 export const DepartmentWithStatsSchema = DepartmentResponseSchema.extend({
   employeeCount: z.number(),
   averageSalaryUsd: z.any().nullable(),
-  managers: z.array(EmployeeResponseSchema)
+  managers: z.array(EmployeeResponseSchema),
 });
 
 // Salary Analytics schemas
@@ -144,7 +152,7 @@ export const SalaryStatsSchema = z.object({
   median: z.any(),
   p25: z.any(),
   p75: z.any(),
-  stdDev: z.any()
+  stdDev: z.any(),
 });
 
 export const SalaryAnalyticsSummarySchema = z.object({
@@ -156,7 +164,7 @@ export const SalaryAnalyticsSummarySchema = z.object({
   totalPayrollUsd: z.any(),
   departmentCount: z.number(),
   countryCount: z.number(),
-  statistics: SalaryStatsSchema
+  statistics: SalaryStatsSchema,
 });
 
 export const DepartmentAnalyticsSchema = z.object({
@@ -167,7 +175,7 @@ export const DepartmentAnalyticsSchema = z.object({
   medianSalaryUsd: z.any(),
   minSalaryUsd: z.any(),
   maxSalaryUsd: z.any(),
-  totalPayrollUsd: z.any()
+  totalPayrollUsd: z.any(),
 });
 
 export const CountryAnalyticsSchema = z.object({
@@ -179,7 +187,7 @@ export const CountryAnalyticsSchema = z.object({
   medianSalaryUsd: z.any(),
   minSalaryUsd: z.any(),
   maxSalaryUsd: z.any(),
-  totalPayrollUsd: z.any()
+  totalPayrollUsd: z.any(),
 });
 
 export const LevelAnalyticsSchema = z.object({
@@ -189,7 +197,7 @@ export const LevelAnalyticsSchema = z.object({
   medianSalaryUsd: z.any(),
   minSalaryUsd: z.any(),
   maxSalaryUsd: z.any(),
-  totalPayrollUsd: z.any()
+  totalPayrollUsd: z.any(),
 });
 
 export const SalaryOutlierSchema = z.object({
@@ -203,7 +211,7 @@ export const SalaryOutlierSchema = z.object({
   expectedRangeMin: z.any(),
   expectedRangeMax: z.any(),
   deviation: z.any(),
-  deviationPercent: z.any()
+  deviationPercent: z.any(),
 });
 
 export type SalaryStats = z.infer<typeof SalaryStatsSchema>;
