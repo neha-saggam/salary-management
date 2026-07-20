@@ -98,12 +98,42 @@ yarn workspace backend prisma:seed
 | Auth failing | Check JWT_SECRET env var; verify token in logs |
 | CI stuck | Check GitHub Actions logs for specific step failures |
 
+## Monitoring & Logging
+
+### Log Configuration
+```bash
+# Development (verbose, human-readable)
+LOG_LEVEL=debug LOG_FORMAT=text npm run dev
+
+# Production (minimal, JSON format)
+LOG_LEVEL=warn LOG_FORMAT=json npm start
+```
+
+### What Gets Logged
+- ✅ All authentication events (login, token validation, permission denials)
+- ✅ CRUD operations (creates, updates, deletes with user info)
+- ✅ Query parameters and filters
+- ✅ All errors with context and request tracing
+- ✅ Request IDs for distributed tracing
+
+### Integration with External Tools
+Ready to integrate with:
+- **Datadog** - Recommended for simplicity
+- **Sentry** - Error tracking & replay
+- **ELK Stack** - Self-hosted logging
+- **AWS CloudWatch** - For AWS deployments
+- **Google Stackdriver** - For GCP deployments
+
+**Setup Guide**: See [docs/MONITORING.md](docs/MONITORING.md)
+
 ## Production Deployment
 
 ### Environment Variables Required
 ```
 JWT_SECRET=<your-secret>
 DATABASE_URL=postgresql://user:pass@rds-endpoint:5432/acme_salary_db
+LOG_LEVEL=warn
+LOG_FORMAT=json
 DEPLOY_HOST=<server-ip>
 DEPLOY_USER=<ssh-user>
 DEPLOY_SSH_KEY=<private-key>
@@ -114,6 +144,7 @@ DEPLOY_SSH_KEY=<private-key>
 2. CI pipeline validates all checks
 3. On success, deploy.yml triggers
 4. Server pulls latest image and runs migrations
+5. Logs are automatically forwarded to monitoring service
 
 ## Making Changes
 
@@ -121,9 +152,10 @@ DEPLOY_SSH_KEY=<private-key>
 1. Define schema in `backend/src/schemas.ts` (Zod)
 2. Implement route in `backend/src/app.ts`
 3. Add requireAuth/requireRole middleware as needed
-4. Add tests in `backend/tests/`
-5. Run `yarn workspace backend format && yarn workspace backend lint`
-6. Commit and push (CI will validate)
+4. **Add logging** with `logger.info()` / `logger.error()`
+5. Add tests in `backend/tests/`
+6. Run `yarn workspace backend format && yarn workspace backend lint`
+7. Commit and push (CI will validate)
 
 ### Modifying Database Schema
 1. Update `backend/prisma/schema.prisma`
@@ -143,3 +175,5 @@ DEPLOY_SSH_KEY=<private-key>
 - Integrated lint/format checks into CI pipeline
 - Created branch protection rules on main
 - All 109 tests passing with auth implemented
+- **Added structured JSON logging throughout application**
+- **Ready for integration with Datadog, Sentry, ELK Stack, CloudWatch**

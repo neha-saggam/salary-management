@@ -1,8 +1,14 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { CreateEmployeeSchema, UpdateEmployeeSchema, CreateDepartmentSchema, UpdateDepartmentSchema } from './schemas.js';
+import {
+  CreateEmployeeSchema,
+  UpdateEmployeeSchema,
+  CreateDepartmentSchema,
+  UpdateDepartmentSchema,
+} from './schemas.js';
 import { requireAuth, signToken } from './auth.js';
+import { logger, generateRequestId, extractUserInfo } from './logger.js';
 
 const prisma = new PrismaClient();
 
@@ -10,6 +16,19 @@ export function createApp() {
   const app = express();
 
   app.use(express.json());
+
+  // Attach request ID to each request for tracing
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const requestId = generateRequestId();
+    (req as any).requestId = requestId;
+    logger.debug('Request started', {
+      requestId,
+      method: req.method,
+      path: req.path,
+      userAgent: req.headers['user-agent'],
+    });
+    next();
+  });
 
   // Support both '/employees' and '/api/employees' paths.
   app.use((req, _res, next) => {
@@ -21,10 +40,11 @@ export function createApp() {
 
   // Health check endpoint — public
   app.get('/health', (_req, res) => {
+    logger.debug('Health check');
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime()
+      uptime: process.uptime(),
     });
   });
 
@@ -35,17 +55,35 @@ export function createApp() {
     try {
       const { email, password } = req.body;
       if (!email || !password) {
+        logger.warn('Login: Missing credentials', {
+          requestId: (req as any).requestId,
+          email: email || 'missing',
+        });
         res.status(400).json({ error: 'email and password are required' });
         return;
       }
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+        logger.warn('Login: Invalid credentials', {
+          requestId: (req as any).requestId,
+          email,
+        });
         res.status(401).json({ error: 'Invalid credentials' });
         return;
       }
       const token = signToken({ userId: user.id, email: user.email, role: user.role });
+      logger.info('Login successful', {
+        requestId: (req as any).requestId,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+      });
       res.json({ token, role: user.role });
-    } catch {
+    } catch (error) {
+      logger.error('Login error', {
+        requestId: (req as any).requestId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       res.status(500).json({ error: 'Login failed' });
     }
   });
@@ -54,26 +92,52 @@ export function createApp() {
   app.post('/auth/register', requireAuth, async (req: Request, res: Response) => {
     try {
       if (req.user?.role !== 'HR_ADMIN') {
+        logger.warn('Register: Insufficient permissions', {
+          requestId: (req as any).requestId,
+          userId: req.user?.userId,
+          userRole: req.user?.role,
+        });
         res.status(403).json({ error: 'Only HR_ADMIN can create users' });
         return;
       }
       const { email, password, role } = req.body;
       if (!email || !password) {
+        logger.warn('Register: Missing credentials', {
+          requestId: (req as any).requestId,
+          email: email || 'missing',
+        });
         res.status(400).json({ error: 'email and password are required' });
         return;
       }
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
+        logger.warn('Register: Email already in use', {
+          requestId: (req as any).requestId,
+          email,
+          createdBy: req.user.userId,
+        });
         res.status(409).json({ error: 'Email already in use' });
         return;
       }
       const passwordHash = await bcrypt.hash(password, 12);
       const user = await prisma.user.create({
         data: { email, passwordHash, role: role ?? 'HR_MANAGER' },
-        select: { id: true, email: true, role: true, createdAt: true }
+        select: { id: true, email: true, role: true, createdAt: true },
+      });
+      logger.info('User registered', {
+        requestId: (req as any).requestId,
+        createdUserId: user.id,
+        createdUserEmail: user.email,
+        createdByUserId: req.user.userId,
+        role: user.role,
       });
       res.status(201).json(user);
-    } catch {
+    } catch (error) {
+      logger.error('Register error', {
+        requestId: (req as any).requestId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        createdBy: req.user?.userId,
+      });
       res.status(500).json({ error: 'Registration failed' });
     }
   });
@@ -91,6 +155,15 @@ export function createApp() {
       const skip = (page - 1) * limit;
       const titleFilter = req.query.title as string | undefined;
       const statusFilter = req.query.status as string | undefined;
+
+      logger.debug('Fetching employees', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        page,
+        limit,
+        titleFilter,
+        statusFilter,
+      });
 
       const where: Record<string, unknown> = {};
       if (titleFilter) where.title = { equals: titleFilter, mode: 'insensitive' };
@@ -114,24 +187,35 @@ export function createApp() {
                 currency: true,
                 amountUsd: true,
                 effectiveDate: true,
-                reason: true
-              }
-            }
-          }
+                reason: true,
+              },
+            },
+          },
         }),
-        prisma.employee.count({ where })
+        prisma.employee.count({ where }),
       ]);
 
       const employeesWithSalary = employees.map((emp) => ({
         ...emp,
-        currentSalary: emp.salaryRecords[0] || null
+        currentSalary: emp.salaryRecords[0] || null,
       }));
+
+      logger.debug('Employees fetched', {
+        requestId: (req as any).requestId,
+        count: employees.length,
+        total,
+      });
 
       res.json({
         data: employeesWithSalary,
-        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       });
     } catch (error) {
+      logger.error('Failed to fetch employees', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       res.status(500).json({ error: 'Failed to fetch employees' });
     }
   });
@@ -140,6 +224,12 @@ export function createApp() {
   app.get('/employees/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+
+      logger.debug('Fetching employee', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        employeeId: id,
+      });
 
       const employee = await prisma.employee.findUnique({
         where: { id },
@@ -156,22 +246,33 @@ export function createApp() {
               currency: true,
               amountUsd: true,
               effectiveDate: true,
-              reason: true
-            }
-          }
-        }
+              reason: true,
+            },
+          },
+        },
       });
 
       if (!employee) {
+        logger.warn('Employee not found', {
+          requestId: (req as any).requestId,
+          ...extractUserInfo(req.user),
+          employeeId: id,
+        });
         res.status(404).json({ error: 'Employee not found' });
         return;
       }
 
       res.json({
         ...employee,
-        currentSalary: employee.salaryRecords[0] || null
+        currentSalary: employee.salaryRecords[0] || null,
       });
     } catch (error) {
+      logger.error('Failed to fetch employee', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        employeeId: req.params.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       res.status(500).json({ error: 'Failed to fetch employee' });
     }
   });
@@ -182,6 +283,11 @@ export function createApp() {
       const parsed = CreateEmployeeSchema.safeParse(req.body);
 
       if (!parsed.success) {
+        logger.warn('Create employee: Validation failed', {
+          requestId: (req as any).requestId,
+          ...extractUserInfo(req.user),
+          errors: parsed.error.flatten(),
+        });
         res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
         return;
       }
@@ -190,10 +296,15 @@ export function createApp() {
 
       // Check if email already exists
       const existing = await prisma.employee.findUnique({
-        where: { email: data.email }
+        where: { email: data.email },
       });
 
       if (existing) {
+        logger.warn('Create employee: Email already in use', {
+          requestId: (req as any).requestId,
+          ...extractUserInfo(req.user),
+          email: data.email,
+        });
         res.status(409).json({ error: 'Email already in use' });
         return;
       }
@@ -210,19 +321,32 @@ export function createApp() {
           title: data.title || null,
           managerId: data.managerId || null,
           hireDate: new Date(data.hireDate),
-          status: data.status || 'ACTIVE'
+          status: data.status || 'ACTIVE',
         },
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
           jobLevel: { select: { id: true, code: true, name: true, rank: true } },
-          manager: true
-        }
+          manager: true,
+        },
+      });
+
+      logger.info('Employee created', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        employeeId: employee.id,
+        email: employee.email,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
       });
 
       res.status(201).json(employee);
     } catch (error) {
-      console.error('Create employee error:', error);
+      logger.error('Failed to create employee', {
+        requestId: (req as any).requestId,
+        ...extractUserInfo(req.user),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       res.status(500).json({ error: 'Failed to create employee' });
     }
   });
@@ -234,6 +358,12 @@ export function createApp() {
       const parsed = UpdateEmployeeSchema.safeParse(req.body);
 
       if (!parsed.success) {
+        logger.warn('Update employee: Validation failed', {
+          requestId: (req as any).requestId,
+          ...extractUserInfo(req.user),
+          employeeId: id,
+          errors: parsed.error.flatten(),
+        });
         res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
         return;
       }
@@ -243,6 +373,11 @@ export function createApp() {
       // Check if employee exists
       const existing = await prisma.employee.findUnique({ where: { id } });
       if (!existing) {
+        logger.warn('Update employee: Employee not found', {
+          requestId: (req as any).requestId,
+          ...extractUserInfo(req.user),
+          employeeId: id,
+        });
         res.status(404).json({ error: 'Employee not found' });
         return;
       }
@@ -250,7 +385,7 @@ export function createApp() {
       // Check if email is being changed and conflicts
       if (data.email && data.email !== existing.email) {
         const emailExists = await prisma.employee.findUnique({
-          where: { email: data.email }
+          where: { email: data.email },
         });
         if (emailExists) {
           res.status(409).json({ error: 'Email already in use' });
@@ -287,15 +422,15 @@ export function createApp() {
               currency: true,
               amountUsd: true,
               effectiveDate: true,
-              reason: true
-            }
-          }
-        }
+              reason: true,
+            },
+          },
+        },
       });
 
       res.json({
         ...employee,
-        currentSalary: employee.salaryRecords[0] || null
+        currentSalary: employee.salaryRecords[0] || null,
       });
     } catch (error) {
       console.error('Update employee error:', error);
@@ -320,8 +455,8 @@ export function createApp() {
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
-          manager: true
-        }
+          manager: true,
+        },
       });
 
       res.json(employee);
@@ -343,8 +478,8 @@ export function createApp() {
         include: {
           country: { select: { id: true, name: true, currencyCode: true } },
           department: { select: { id: true, name: true } },
-          manager: true
-        }
+          manager: true,
+        },
       });
 
       if (!employee) {
@@ -354,12 +489,12 @@ export function createApp() {
 
       const records = await prisma.salaryRecord.findMany({
         where: { employeeId: id },
-        orderBy: { effectiveDate: 'desc' }
+        orderBy: { effectiveDate: 'desc' },
       });
 
       res.json({
         employee,
-        records
+        records,
       });
     } catch (error) {
       console.error('Salary history error:', error);
@@ -406,20 +541,20 @@ export function createApp() {
                 email: true,
                 jobLevel: true,
                 country: { select: { id: true, name: true, currencyCode: true } },
-                department: { select: { id: true, name: true } }
-              }
-            }
+                department: { select: { id: true, name: true } },
+              },
+            },
           },
           orderBy: { effectiveDate: 'desc' },
           skip,
-          take: limit
+          take: limit,
         }),
-        prisma.salaryRecord.count({ where })
+        prisma.salaryRecord.count({ where }),
       ]);
 
       res.json({
         data: records,
-        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       });
     } catch (error) {
       console.error('Salary records error:', error);
@@ -435,10 +570,14 @@ export function createApp() {
       const departments = await prisma.department.findMany({
         include: {
           employees: {
-            select: { id: true, jobLevel: true, salaryRecords: { take: 1, orderBy: { effectiveDate: 'desc' } } }
-          }
+            select: {
+              id: true,
+              jobLevel: true,
+              salaryRecords: { take: 1, orderBy: { effectiveDate: 'desc' } },
+            },
+          },
         },
-        orderBy: { name: 'asc' }
+        orderBy: { name: 'asc' },
       });
 
       const departmentsWithStats = departments.map((dept) => ({
@@ -451,7 +590,7 @@ export function createApp() {
                 return sum + Number(salary);
               }, 0) / dept.employees.length
             : null,
-        managers: []
+        managers: [],
       }));
 
       res.json(departmentsWithStats);
@@ -481,13 +620,13 @@ export function createApp() {
                   currency: true,
                   amountUsd: true,
                   effectiveDate: true,
-                  reason: true
-                }
-              }
+                  reason: true,
+                },
+              },
             },
-            orderBy: { firstName: 'asc' }
-          }
-        }
+            orderBy: { firstName: 'asc' },
+          },
+        },
       });
 
       if (!department) {
@@ -497,7 +636,7 @@ export function createApp() {
 
       const employeesWithSalary = department.employees.map((emp) => ({
         ...emp,
-        currentSalary: emp.salaryRecords[0] || null
+        currentSalary: emp.salaryRecords[0] || null,
       }));
 
       const stats = {
@@ -506,10 +645,12 @@ export function createApp() {
         employeeCount: employeesWithSalary.length,
         averageSalaryUsd:
           employeesWithSalary.length > 0
-            ? employeesWithSalary.reduce((sum, emp) => sum + Number(emp.currentSalary?.amountUsd || 0), 0) /
-              employeesWithSalary.length
+            ? employeesWithSalary.reduce(
+                (sum, emp) => sum + Number(emp.currentSalary?.amountUsd || 0),
+                0
+              ) / employeesWithSalary.length
             : null,
-        employees: employeesWithSalary
+        employees: employeesWithSalary,
       };
 
       res.json(stats);
@@ -533,7 +674,7 @@ export function createApp() {
 
       // Check if department already exists
       const existing = await prisma.department.findUnique({
-        where: { name: data.name }
+        where: { name: data.name },
       });
 
       if (existing) {
@@ -542,7 +683,7 @@ export function createApp() {
       }
 
       const department = await prisma.department.create({
-        data: { name: data.name }
+        data: { name: data.name },
       });
 
       res.status(201).json(department);
@@ -575,7 +716,7 @@ export function createApp() {
       // Check if new name conflicts with another department
       if (data.name && data.name !== existing.name) {
         const conflict = await prisma.department.findUnique({
-          where: { name: data.name }
+          where: { name: data.name },
         });
         if (conflict) {
           res.status(409).json({ error: 'Department name already in use' });
@@ -585,7 +726,7 @@ export function createApp() {
 
       const department = await prisma.department.update({
         where: { id },
-        data
+        data,
       });
 
       res.json(department);
@@ -602,7 +743,7 @@ export function createApp() {
 
       const existing = await prisma.department.findUnique({
         where: { id },
-        include: { _count: { select: { employees: true } } }
+        include: { _count: { select: { employees: true } } },
       });
 
       if (!existing) {
@@ -616,7 +757,7 @@ export function createApp() {
       }
 
       const department = await prisma.department.delete({
-        where: { id }
+        where: { id },
       });
 
       res.json(department);
@@ -653,7 +794,7 @@ export function createApp() {
     try {
       const records = await prisma.salaryRecord.findMany({
         where: { reason: 'HIRE' }, // Only latest HIRE records
-        select: { amountUsd: true, employee: { select: { id: true } } }
+        select: { amountUsd: true, employee: { select: { id: true } } },
       });
 
       const salaries = records.map((r) => Number(r.amountUsd));
@@ -665,11 +806,11 @@ export function createApp() {
         median: percentile(salaries, 50),
         p25: percentile(salaries, 25),
         p75: percentile(salaries, 75),
-        stdDev: stdDev(salaries)
+        stdDev: stdDev(salaries),
       };
 
       const employees = await prisma.employee.findMany({
-        select: { countryId: true, departmentId: true }
+        select: { countryId: true, departmentId: true },
       });
 
       const departments = new Set(employees.map((e) => e.departmentId)).size;
@@ -684,7 +825,7 @@ export function createApp() {
         totalPayrollUsd: salaries.reduce((a, b) => a + b, 0),
         departmentCount: departments,
         countryCount: countries,
-        statistics: stats
+        statistics: stats,
       });
     } catch (error) {
       console.error('Analytics summary error:', error);
@@ -702,11 +843,11 @@ export function createApp() {
               salaryRecords: {
                 where: { reason: 'HIRE' },
                 orderBy: { effectiveDate: 'desc' },
-                take: 1
-              }
-            }
-          }
-        }
+                take: 1,
+              },
+            },
+          },
+        },
       });
 
       const analytics = departments.map((dept) => {
@@ -719,11 +860,12 @@ export function createApp() {
           departmentId: dept.id,
           departmentName: dept.name,
           employeeCount: employeesWithSalaries.length,
-          averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+          averageSalaryUsd:
+            salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
           medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
           minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
           maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
-          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0,
         };
       });
 
@@ -744,15 +886,17 @@ export function createApp() {
               salaryRecords: {
                 where: { reason: 'HIRE' },
                 orderBy: { effectiveDate: 'desc' },
-                take: 1
-              }
-            }
-          }
-        }
+                take: 1,
+              },
+            },
+          },
+        },
       });
 
       const analytics = countries.map((country) => {
-        const employeesWithSalaries = country.employees.filter((emp) => emp.salaryRecords.length > 0);
+        const employeesWithSalaries = country.employees.filter(
+          (emp) => emp.salaryRecords.length > 0
+        );
         const salaries = employeesWithSalaries
           .map((emp) => Number(emp.salaryRecords[0]!.amountUsd))
           .filter((s) => s > 0);
@@ -762,11 +906,12 @@ export function createApp() {
           countryName: country.name,
           currencyCode: country.currencyCode,
           employeeCount: employeesWithSalaries.length,
-          averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+          averageSalaryUsd:
+            salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
           medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
           minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
           maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
-          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+          totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0,
         };
       });
 
@@ -791,9 +936,9 @@ export function createApp() {
               salaryRecords: {
                 where: { reason: 'HIRE' },
                 orderBy: { effectiveDate: 'desc' },
-                take: 1
-              }
-            }
+                take: 1,
+              },
+            },
           });
 
           const employeesWithSalaries = employees.filter((emp) => emp.salaryRecords.length > 0);
@@ -806,11 +951,12 @@ export function createApp() {
             jobLevelName: jl.name,
             rank: jl.rank,
             employeeCount: employeesWithSalaries.length,
-            averageSalaryUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
+            averageSalaryUsd:
+              salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) / salaries.length : 0,
             medianSalaryUsd: salaries.length > 0 ? percentile(salaries, 50) : 0,
             minSalaryUsd: salaries.length > 0 ? Math.min(...salaries) : 0,
             maxSalaryUsd: salaries.length > 0 ? Math.max(...salaries) : 0,
-            totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0
+            totalPayrollUsd: salaries.length > 0 ? salaries.reduce((a, b) => a + b, 0) : 0,
           };
         })
       );
@@ -835,9 +981,9 @@ export function createApp() {
           salaryRecords: {
             where: { reason: 'HIRE' },
             orderBy: { effectiveDate: 'desc' },
-            take: 1
-          }
-        }
+            take: 1,
+          },
+        },
       });
 
       // Calculate stats per level code
@@ -847,9 +993,7 @@ export function createApp() {
       employees.forEach((emp) => {
         const code = emp.jobLevel.code;
         if (!salariesByLevel[code]) salariesByLevel[code] = [];
-        const salary = emp.salaryRecords[0]?.amountUsd
-          ? Number(emp.salaryRecords[0].amountUsd)
-          : 0;
+        const salary = emp.salaryRecords[0]?.amountUsd ? Number(emp.salaryRecords[0].amountUsd) : 0;
         if (salary > 0) salariesByLevel[code].push(salary);
       });
 
@@ -886,7 +1030,7 @@ export function createApp() {
               expectedRangeMin: stats.avg - deviationThreshold * stats.stdDev,
               expectedRangeMax: stats.avg + deviationThreshold * stats.stdDev,
               deviation: deviation,
-              deviationPercent: deviationPercent
+              deviationPercent: deviationPercent,
             };
           }
           return null;
@@ -897,7 +1041,7 @@ export function createApp() {
       res.json({
         threshold: deviationThreshold,
         outlierCount: outliers.length,
-        outliers
+        outliers,
       });
     } catch (error) {
       console.error('Outliers error:', error);
