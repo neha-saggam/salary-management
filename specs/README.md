@@ -194,20 +194,18 @@ yarn workspace backend test -- departments.test.ts
 
 ---
 
-## Known Limitations
+## Known Limitations & Future Roadmap
 
-- ❌ No rate limiting (add express-rate-limit)
-- ❌ No request logging (add morgan/pino)
-- ❌ No API documentation (add Swagger/OpenAPI)
-- ❌ No audit trails (consider for compliance)
-- ❌ No caching layer (Redis for analytics)
-- ❌ No full-text search (PostgreSQL FTS possible)
-- ❌ No file uploads (for bulk import)
-- ❌ No 2FA/MFA (for sensitive accounts)
+This section has been moved to a dedicated [SCOPE.md](../SCOPE.md) file that clearly separates:
+
+- **Out of Scope** - Features intentionally not building (SSO, ML, payroll processing, etc.)
+- **Future Enhancements (v1.1)** - Improvements to existing features (caching, 2FA, audit trails, etc.)
+- **Future Features (v2.0)** - Major new modules (recruitment, time tracking, L&D, etc.)
+- **Roadmap** - Prioritized timeline by quarter and year
+
+**→ See [SCOPE.md](../SCOPE.md) for complete roadmap and decision framework**
 
 ---
-
-## Deployment Checklist
 
 ### Before Production
 - [ ] Branch protection enabled on main
@@ -230,18 +228,13 @@ yarn workspace backend test -- departments.test.ts
 
 ---
 
-## Future Features (Not Yet Implemented)
+## Project Roadmap
 
-- [ ] Performance reviews and ratings
-- [ ] Bonus and commission tracking
-- [ ] Benefits and deductions
-- [ ] Org chart visualization
-- [ ] Budget forecasting
-- [ ] Succession planning
-- [ ] Training and development tracking
-- [ ] Attendance and time tracking
-- [ ] Leave management
-- [ ] Payroll integration
+See [SCOPE.md](../SCOPE.md) for:
+- What's out of scope (intentionally not building)
+- What's planned for v1.1 (future enhancements)
+- What's planned for v2.0 (major features)
+- Complete feature roadmap by priority
 
 ---
 
